@@ -8,8 +8,15 @@
  * 需要「01_基礎」「02_盤點」。
  */
 
-/** 網頁入口（Google 規定的名稱，不能改）。 */
-function doGet() {
+/**
+ * 網頁入口（Google 規定的名稱，不能改）。
+ * 網址後面加 ?page=xxx 時，交給其他步驟的 page_xxx 函式（例如列印頁 page_print）；否則顯示手機盤點。
+ */
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.page && /^\w+$/.test(p.page) && typeof globalThis['page_' + p.page] === 'function') {
+    return globalThis['page_' + p.page](p);
+  }
   return HtmlService.createHtmlOutput(MOBILE_HTML)
     .setTitle('實驗室盤點')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -82,18 +89,25 @@ function mobileSearch(q) {
   return { rows: out, more: out.length >= 60, categories: s.lists['類別'] || [], rooms: s.lists['教室'] || [] };
 }
 
-/** 選單：顯示手機網址與 QR code。 */
-function showMobileLink() {
+/** 網頁應用程式網址（結尾 /exec）。找不到時提醒使用者並回傳 ''。 */
+function webAppUrl_() {
   const s = getSettings_();
-  let url = String(s.params['手機網頁網址'] || '');
-  if (!/^https:\/\/script\.google\.com\/.+\/exec/.test(url)) {
+  let url = String(s.params['手機網頁網址'] || '').trim();
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
     url = ScriptApp.getService().getUrl() || '';
   }
-  if (!/\/exec/.test(url)) {
+  if (!/\/exec$/.test(url)) {
     SpreadsheetApp.getUi().alert('還沒有部署成網頁應用程式，或網址不正確。\n\n' +
       '請依安裝說明第 4 步「部署」，把部署後的網址（結尾是 /exec）貼到「設定」工作表的「手機網頁網址」。');
-    return;
+    return '';
   }
+  return url;
+}
+
+/** 選單：顯示手機網址與 QR code。 */
+function showMobileLink() {
+  const url = webAppUrl_();
+  if (!url) return;
   const html = `<div style="font-family:sans-serif;text-align:center">
     <div id="qr" style="display:inline-block;margin:8px"></div>
     <p style="font-size:13px;color:#555">用手機相機掃描 QR code 開啟，<br>再用瀏覽器選單「加到主畫面」。</p>
