@@ -186,11 +186,59 @@ h_0821 = by_name(old114_1, 4, [10])         # 114.8.21
 h_0625 = by_name(old114_2, 4, [10])         # 115.06.25
 
 # 生物耗材中與藥品重複、合併為一筆的品項（承辦人決定：合併，化準與生準冰箱分處存放）
-MERGE_BIO = {'抗A血清', '抗B血清', '腎上腺素', '油性椒紅色素', '雙縮脲試劑'}
+MERGE_BIO = {'抗A血清', '抗B血清', '腎上腺素', '油性椒紅色素', '雙縮脲試劑A', '雙縮脲試劑B'}
 merged = {}   # 品名 → item
+# 一列兩種藥品，承辦人決定拆成兩筆：原品名 → [(新品名, 化學式或規格)]
+SPLIT = {
+    '順/反 丁烯二酸': [('順丁烯二酸', 'C4H4O4'), ('反丁烯二酸', 'C4H4O4')],
+    '雙縮脲試劑': [('雙縮脲試劑A', 'A劑'), ('雙縮脲試劑B', 'B劑')],
+}
+
+
+def per_part(v):
+    """拆開後每一筆的數量：「各1」→ 1、「各10小瓶」→ 10小瓶。"""
+    if isinstance(v, str) and clean(v).startswith('各'):
+        return clean(v)[1:]
+    return v
 
 D_1208, D_0208, D_0513, D_0710 = roc('113.12.5'), roc('114.2.8'), roc('114.5.13'), roc('114.7.10')
 D_0821, D_0625, D_0826 = roc('114.8.21'), roc('115.06.25'), roc('115.08.26')
+
+
+def drug_row(it, name, orig, split, g, h, i, j, k):
+    if name in MERGE_BIO:
+        it['科別'] = '生物'
+        it['分處存放'] = '化準、生準冰箱'
+        merged[name] = it
+    if name == '硫酸鉻鉀':
+        it['SDS'] = ''
+        add_check('待補', it, 'SDS', '', '', '115-1 新增，舊檔沒有 SDS 紀錄，請補填有／無')
+
+    # 115.08.26：K 欄有數字時，K 才是 115.08.26 的數量（J 為上次的數字）
+    latest = j
+    if k is not None and (isinstance(k, (int, float)) or re.fullmatch(NUM, str(k).strip())):
+        latest = k
+        add_check('轉入說明', it, '盤點數量', f'J欄 {clean(j)}／K欄 {clean(k)}', clean(k),
+                  '依承辦人說明：K 欄是 115.08.26 最新數量，J 欄為上次數字')
+    hist = [(D_1208, h_1128.get(orig, [None])[0]), (D_0208, g), (D_0513, h), (D_0710, i),
+            (D_0821, h_0821.get(orig, [None])[0]), (D_0625, h_0625.get(orig, [None])[0]),
+            (D_0826, latest)]
+    for d, v in hist:
+        if split:
+            v = per_part(v)
+        if name == '油性椒紅色素' and isinstance(v, str) and '化準' in v:
+            m = re.fullmatch(r'化準(\S+?)生準(\S+)', clean(v))
+            add_rec(d, it, m.group(1), '化準')
+            add_rec(d, it, m.group(2), '生準冰箱')
+        elif name in MERGE_BIO:
+            add_rec(d, it, v, '生準冰箱')
+        else:
+            add_rec(d, it, v)
+    if isinstance(k, str) and '新購' in k:
+        m = re.match(r'(\d+\.\d+\.\d+)新購(\d+)', k.strip())
+        if m:
+            moves.append([roc(m.group(1)), it['編號'], name, '新購', int(m.group(2)), clean(k), ''])
+
 
 for r in range(4, ws.max_row + 1):
     seq = ws.cell(r, 1).value
@@ -207,38 +255,13 @@ for r in range(4, ws.max_row + 1):
     note = ''
     if isinstance(k, str) and not re.fullmatch(NUM, k.strip()):
         note = clean(k)
-    it = new_item(類別='藥品', 科別='化學', 清單分區='藥品清單', 品名=name_raw, 化學式或規格=formula,
-                  教室=room, 櫃別=cab, 排序位置=pos, SDS=sds, 備註=note, 原清單序號=seq)
-    if name in MERGE_BIO:
-        it['科別'] = '生物'
-        it['分處存放'] = '化準、生準冰箱'
-        merged[name] = it
-    if name == '硫酸鉻鉀':
-        it['SDS'] = ''
-        add_check('待補', it, 'SDS', '', '', '115-1 新增，舊檔沒有 SDS 紀錄，請補填有／無')
-
-    # 115.08.26：K 欄有數字時，K 才是 115.08.26 的數量（J 為上次的數字）
-    latest = j
-    if k is not None and (isinstance(k, (int, float)) or re.fullmatch(NUM, str(k).strip())):
-        latest = k
-        add_check('轉入說明', it, '盤點數量', f'J欄 {clean(j)}／K欄 {clean(k)}', clean(k),
-                  '依承辦人說明：K 欄是 115.08.26 最新數量，J 欄為上次數字')
-    hist = [(D_1208, h_1128.get(name, [None])[0]), (D_0208, g), (D_0513, h), (D_0710, i),
-            (D_0821, h_0821.get(name, [None])[0]), (D_0625, h_0625.get(name, [None])[0]),
-            (D_0826, latest)]
-    for d, v in hist:
-        if name == '油性椒紅色素' and isinstance(v, str) and '化準' in v:
-            m = re.fullmatch(r'化準(\S+?)生準(\S+)', clean(v))
-            add_rec(d, it, m.group(1), '化準')
-            add_rec(d, it, m.group(2), '生準冰箱')
-        elif name in MERGE_BIO:
-            add_rec(d, it, v, '生準冰箱')
-        else:
-            add_rec(d, it, v)
-    if isinstance(k, str) and '新購' in k:
-        m = re.match(r'(\d+\.\d+\.\d+)新購(\d+)', k.strip())
-        if m:
-            moves.append([roc(m.group(1)), it['編號'], name, '新購', int(m.group(2)), clean(k), ''])
+    parts = SPLIT.get(name, [(name_raw, formula)])
+    for part_name, part_formula in parts:
+        it = new_item(類別='藥品', 科別='化學', 清單分區='藥品清單', 品名=part_name, 化學式或規格=part_formula,
+                      教室=room, 櫃別=cab, 排序位置=pos, SDS=sds, 備註=note, 原清單序號=seq)
+        if len(parts) > 1:
+            add_check('轉入說明', it, '品名', name, part_name, f'依承辦人決定，原「{name}」拆成兩筆')
+        drug_row(it, part_name.strip(), name, len(parts) > 1, g, h, i, j, k)
 
 # 甲醛：113-2 以後已移除，保留為「已淘汰」與歷史數字
 for r in range(3, old113_1.max_row + 1):
@@ -269,7 +292,10 @@ def chem_cat(name, zone):
 
 def date_from_header(v):
     m = re.search(r'(\d{3})\.(\d{1,2})\.(\d{1,2})', clean(v))
-    return roc(m.group(0)) if m else None
+    if not m:
+        return None
+    # 承辦人確認：化準器材區、化準綜合區、科學館共用 標題寫 115.06.17 的欄位，實際是 115.08.26 盤點
+    return D_0826 if m.group(0) == '115.06.17' else roc(m.group(0))
 
 
 def chem_sheet(sheet_name, zone_name, room_default, qty_cols, note_col, memo_cols, zone_is_cab=True):
@@ -292,9 +318,15 @@ def chem_sheet(sheet_name, zone_name, room_default, qty_cols, note_col, memo_col
         it = new_item(類別=chem_cat(name_raw, loc), 科別='化學', 清單分區=zone_name, 品名=name_raw,
                       單位=clean(sh.cell(r, 4).value), 教室=room, 櫃別=loc, 排序位置=int(seq),
                       備註=clean(sh.cell(r, note_col).value), 自己筆記=memo, 原清單序號=int(seq))
-        if zone_name == '化1化2' and not loc.startswith(('化1', '化一', '化2', '化二')):
-            add_check('假設', it, '教室', '', room,
-                      f'存放位置「{loc}」沒寫是哪間教室，依前後列推定為 {room}，請確認')
+        # 承辦人決定：兩筆「10mL分度吸量管」合併為一筆，各次數量相加
+        prev = items[-2] if len(items) > 1 else None
+        if prev and prev['清單分區'] == zone_name and clean(prev['品名']) == clean(name_raw):
+            items.pop()
+            counters[it['類別']] -= 1
+            prev['自己筆記'] = join_notes(prev['自己筆記'], f'原序{int(seq)}併入', it['備註'], it['自己筆記'])
+            add_check('轉入說明', prev, '品名', f'序{prev["原清單序號"]}、序{int(seq)} 同名', clean(name_raw),
+                      '依承辦人決定合併為一筆，各次盤點數量相加；原序號與備註移到自己筆記')
+            it = prev
         for d, c in zip(dates, qty_cols):
             add_rec(d, it, sh.cell(r, c).value)
     return dates
@@ -352,18 +384,10 @@ for r in range(5, sh.max_row + 1):
     memo = '' if is_buy else join_notes(buy_when, buy_qty)
     seq = int(sh.cell(r, 1).value)
 
-    base = '雙縮脲試劑' if name.startswith('雙縮脲試劑') else name
-    if base in merged:
-        it = merged[base]
-        if name.startswith('雙縮脲試劑'):
-            # 藥品清單為一筆「雙縮脲試劑 (A、B劑)」，此處 A、B 分列；合併在藥品那筆，數量說明保留「各10小瓶」
-            if name.endswith('A'):
-                add_check('需決定', it, '品名', '雙縮脲試劑（藥品清單一筆）',
-                          '拆成 雙縮脲試劑A、雙縮脲試劑B 兩筆？',
-                          '生物耗材清單分成 A、B 兩筆各 10 小瓶；目前合併為藥品那一筆，數量說明「各10小瓶」')
-            continue
+    if name in merged:
+        it = merged[name]
         drug_latest = [rec for rec in records if rec[1] == it['編號'] and rec[0] == D_0826]
-        if clean(j) and all(str(rec[4]) != clean(j) for rec in drug_latest if rec[3] == '生準冰箱'):
+        if clean(j) and all(clean(rec[4]) != clean(j) for rec in drug_latest if rec[3] == '生準冰箱'):
             dl = '、'.join(f'{rec[3]} {rec[5] or rec[4]}' for rec in drug_latest)
             # 以生物耗材的冰箱數字為準
             records[:] = [rec for rec in records if not (rec[1] == it['編號'] and rec[0] == D_0826 and rec[3] == '生準冰箱')]
@@ -479,6 +503,18 @@ for r in range(4, 30):
     if course != '選手培訓用':
         slides_need.append([ref, clean(name), grade, course, need, b1, p1, b2, p2, plan, join_notes(n1, n2)])
 
+# 同一次盤點、同一品項、同一存放處有兩筆（合併品項造成）→ 數量相加
+combined = {}
+for rec in records:
+    key = (rec[0], rec[1], rec[3])
+    if key in combined:
+        prev = combined[key]
+        prev[4] = round((prev[4] or 0) + (rec[4] or 0), 3)
+        prev[5] = join_notes(prev[5], rec[5])
+    else:
+        combined[key] = rec
+records[:] = list(combined.values())
+
 # ================================================================ 疑似錯誤（不自動更正）
 
 by_name_zone = {}
@@ -530,24 +566,20 @@ sug('欄位', 'Bacto Agar (BD214010)', '化學式或規格', '', '化學式欄�
 sug('欄位', 'LB Broth (sigma L3522)', '化學式或規格', '', '化學式欄填「蛋白腖」，非化學式；照原樣也可以', apply=False)
 sug('欄位', '牛血清白蛋白', '化學式或規格', '', '化學式欄填英文名；照原樣也可以', apply=False)
 sug('欄位', '固綠', '化學式或規格', '', '化學式欄填英文名；照原樣也可以', apply=False)
-sug('需決定', '順/反 丁烯二酸', '品名', '拆成 順丁烯二酸、反丁烯二酸 兩筆？', '一列兩種藥品，數量「各1」', apply=False)
 sug('錯字', '250mL 圓底燒杯', '品名', '250mL 圓底燒瓶', '圓底應為燒瓶')
 sug('錯字', '500mL 圓底燒杯', '品名', '500mL 圓底燒瓶', '圓底應為燒瓶')
 for c in ('綠色盒子', '橘色盒子', '藍色盒子', '藍色塑膠盒PH-5011'):
     sug('錯字', f'ph pen ({c})', '品名', f'pH pen ({c})', 'pH 寫法')
 sug('錯字', '手趴雞用手套', '品名', '手扒雞用手套', '「趴」應為「扒」')
-dup = [it for it in items if clean(it['品名']) == '10mL分度吸量管']
-for it in dup:
-    add_check('需決定', it, '品名', it['品名'], '', '有兩筆同名「10mL分度吸量管」（序6、序7），請加上區別，例如「(114.6新增)」')
 sug('錯字', '砂紙粗)', '品名', '砂紙(粗)', '少左括號')
 sug('錯字', '布式漏斗', '品名', '布氏漏斗', 'Büchner 漏斗')
 sug('錯字', 'Parafilm封口臘膜', '品名', 'Parafilm封口蠟膜', '「臘」應為「蠟」')
 sug('錯字', '美工刀', '備註', '含庫存區新的：20', '多一個「含」', zone='化準綜合區')
 sug('錯字', '毛莨根', '品名', '毛茛根', '「莨」應為「茛」')
-add_check('需確認', None, '', '化1化2 櫃別', '', '「化1A櫃」與「化一B櫃」寫法混用；教室欄已統一為化一／化二，櫃別照原文')
+add_check('需確認', None, '', '化1化2 櫃別', '', '「化1A櫃」與「化一B櫃」寫法混用；教室欄已統一為化一／化二（窗邊、講桌、抽風櫃等依前後列歸屬，已確認），櫃別照原文')
 add_check('需確認', None, '', '教室寫法', '', '藥品清單用「化準、化一、生準」，生物清單用「生1、生2、生3」；照原文轉入。要統一（例：生1→生一）請告訴我')
-add_check('需確認', None, '', '化準器材區、化準綜合區、科學館共用 最後一欄', '',
-          '欄位標題寫 115.06.17，但表頭寫 115.08.26；目前照欄位標題記為 115.06.17。若實際是 115.08.26 盤點請告訴我，可一次改掉')
+add_check('轉入說明', None, '', '化準器材區、化準綜合區、科學館共用 最後一欄', '115.08.26',
+          '標題寫 115.06.17，依承辦人確認記為 115.08.26')
 add_check('需確認', None, '', '永久玻片 購買數量／單價', '',
           '表頭年份（111年、3.18、112年、12.5）與欄位對應不清楚，已照原欄位放在「玻片需求」的第1批、第2批')
 kits_6mm = [k for k in kits if '6mm' in k[4]]
