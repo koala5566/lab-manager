@@ -214,7 +214,7 @@ function finishCount() {
         const mode = document.querySelector('input[name=mode]:checked').value;
         const b = document.getElementById('go'); b.disabled = true; b.textContent = '儲存中…';
         google.script.run
-          .withSuccessHandler(function (msg) { alert(msg); google.script.host.close(); })
+          .withSuccessHandler(function (msg) { showDone(msg); })
           .withFailureHandler(function (e) { alert(e.message); b.disabled = false; b.textContent = '存入盤點紀錄'; })
           .saveCount({ date: document.getElementById('date').value, name: document.getElementById('name').value, mode: mode });
       }
@@ -256,9 +256,15 @@ function saveCount(opts) {
     writeCountSheet_(keep);
     updateLatest();
     if (typeof refreshRestock === 'function') refreshRestock();
+    // 第一批優化（07_安全美化）：存檔後自動備份一份、更新刪除偵測的基準
+    let backupNote = '';
+    if (typeof backupNow === 'function') {
+      try { backupNote = '\n已自動備份：' + backupNow('完成盤點', true); } catch (e) { backupNote = '\n（自動備份沒有成功：' + e.message + '）'; }
+    }
+    if (typeof recordBaseline_ === 'function') recordBaseline_();
 
     return '已存入 ' + save.length + ' 筆盤點紀錄' + (replaced ? '（覆蓋同日舊紀錄 ' + replaced + ' 筆）' : '') +
-      '。\n' + (keep.length ? '盤點表還有 ' + keep.length + ' 列沒填，已保留。' : '本次盤點全部完成！');
+      '。\n' + (keep.length ? '盤點表還有 ' + keep.length + ' 列沒填，已保留。' : '本次盤點全部完成！') + backupNote;
   } finally {
     lock.releaseLock();
   }
@@ -341,18 +347,54 @@ function defaultCountName_(settings, d) {
   return String(settings.params['學年度學期'] || '') + stage;
 }
 
+/**
+ * 所有對話框共用的外觀與小工具：
+ * ・alert() 改成在對話框頂端顯示紅色訊息（瀏覽器內建的提示框會顯示一長串網址，看起來像亂碼）
+ * ・showDone(訊息)：整個對話框換成綠色打勾＋訊息＋「關閉」按鈕
+ * ・按鈕停用（處理中）時自動顯示轉圈
+ */
 const DIALOG_STYLE = `<style>
-  body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 14px; color: #222; }
-  label { display: block; margin: 12px 0 4px; font-weight: bold; }
-  label.inline { font-weight: normal; margin: 6px 0; }
-  select, input:not([type=radio]):not([type=checkbox]) { width: 100%; padding: 6px; font-size: 14px; box-sizing: border-box; }
+  body { font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; font-size: 15px; color: #202124;
+    margin: 0; padding: 4px 6px; }
+  label { display: block; margin: 14px 0 5px; font-weight: bold; color: #3c4043; }
+  label.inline { font-weight: normal; margin: 7px 0; color: #202124; }
+  select, input:not([type=radio]):not([type=checkbox]) { width: 100%; padding: 8px 10px; font-size: 15px;
+    box-sizing: border-box; border: 1px solid #dadce0; border-radius: 6px; background: #fff; }
+  select:focus, input:focus { outline: 2px solid #1a73e8; border-color: #1a73e8; }
+  input[type=radio], input[type=checkbox] { transform: scale(1.15); margin-right: 6px; }
   .row { display: flex; gap: 8px; }
-  .warn { color: #b00020; margin-top: 12px; }
-  .hint { color: #666; font-size: 12px; }
-  .btns { margin-top: 18px; text-align: right; }
-  button { padding: 8px 16px; font-size: 14px; margin-left: 8px; }
-  button.primary { background: #1a73e8; color: #fff; border: none; border-radius: 4px; }
-</style>`;
+  .warn { color: #b3261e; background: #fce8e6; padding: 8px 10px; border-radius: 6px; margin-top: 12px; }
+  .hint { color: #5f6368; font-size: 13px; }
+  .btns { margin-top: 20px; text-align: right; }
+  button { padding: 9px 18px; font-size: 15px; margin-left: 8px; border-radius: 6px; border: 1px solid #dadce0;
+    background: #fff; cursor: pointer; }
+  button:hover { background: #f1f3f4; }
+  button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  button.primary:hover { background: #1765cc; }
+  button[disabled] { opacity: .75; cursor: wait; }
+  button.primary[disabled]::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px;
+    border: 2px solid #fff; border-right-color: transparent; border-radius: 50%; vertical-align: -1px;
+    animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .msg { padding: 10px 12px; border-radius: 6px; margin: 6px 0 10px; line-height: 1.5; white-space: pre-line; }
+  .msg.err { background: #fce8e6; color: #b3261e; }
+  .done { text-align: center; padding: 22px 10px; }
+  .done .ok { width: 56px; height: 56px; line-height: 56px; margin: 0 auto 14px; border-radius: 50%;
+    background: #e6f4ea; color: #188038; font-size: 30px; }
+  .done .txt { white-space: pre-line; line-height: 1.7; margin-bottom: 20px; }
+</style>
+<script>
+  window.alert = function (m) {
+    var d = document.getElementById('__msg');
+    if (!d) { d = document.createElement('div'); d.id = '__msg'; document.body.insertBefore(d, document.body.firstChild); }
+    d.className = 'msg err'; d.textContent = '⚠ ' + m; window.scrollTo(0, 0);
+  };
+  function showDone(m) {
+    document.body.innerHTML = '<div class="done"><div class="ok">✔</div><div class="txt"></div>' +
+      '<button class="primary" onclick="google.script.host.close()">關閉</button></div>';
+    document.querySelector('.done .txt').textContent = m;
+  }
+</script>`;
 
 /** 顯示對話框，data 以 JSON 放進頁面的 __DATA__。 */
 function showDialog_(html, data, title, height) {

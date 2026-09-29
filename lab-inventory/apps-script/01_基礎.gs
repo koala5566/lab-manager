@@ -6,23 +6,33 @@
  * 其他步驟的程式會用到這裡的共用函式，請不要刪除這個檔案。
  */
 
-// 自訂選單。後面步驟的功能「程式存在才會顯示」，所以這裡先全部列好。
-// null 代表分隔線。
+// 自訂選單：[子選單名稱, [[項目, 函式名稱], …]]；只有一項的直接放在主選單。
+// 後面步驟的功能「程式存在才會顯示」，所以這裡先全部列好。null 代表分隔線。
 const MENU = [
-  ['產生盤點表', 'makeCountSheet'],
-  ['完成盤點（存入盤點紀錄）', 'finishCount'],
-  ['開啟手機盤點網址', 'showMobileLink'],
-  null,
-  ['列印藥品清單', 'printDrugList'],
-  ['列印器材耗材清單', 'printEquipmentList'],
-  ['列印申報清單（期初／期末）', 'printDeclaration'],
-  ['列印藥品櫃標示', 'printCabinetLabels'],
-  ['列印需補充清單', 'printRestockList'],
-  null,
-  ['更新需補充清單', 'refreshRestock'],
-  ['重新計算最新數量', 'updateLatest'],
-  ['補上缺少的編號', 'fillMissingIds'],
-  ['套用工作表格式與下拉選單', 'setupSheets'],
+  ['🏠 回到首頁', 'goHome'],
+  ['📋 盤點', [
+    ['產生盤點表', 'makeCountSheet'],
+    ['完成盤點（存入盤點紀錄）', 'finishCount'],
+    ['開啟手機盤點網址', 'showMobileLink'],
+  ]],
+  ['🖨 列印', [
+    ['藥品清單', 'printDrugList'],
+    ['器材耗材清單', 'printEquipmentList'],
+    ['申報清單（期初／期末）', 'printDeclaration'],
+    null,
+    ['藥品櫃標示', 'printCabinetLabels'],
+    ['需補充清單', 'printRestockList'],
+  ]],
+  ['🔧 維護', [
+    ['立即備份', 'backupNow'],
+    ['首頁、美化與資料保護（一次設定）', 'setupEnhancements'],
+    null,
+    ['重新計算最新數量', 'updateLatest'],
+    ['補上缺少的編號', 'fillMissingIds'],
+    ['更新需補充清單', 'refreshRestock'],
+    ['套用安全存量建議', 'applySafetyStock'],
+    ['套用工作表格式與下拉選單', 'setupSheets'],
+  ]],
 ];
 
 const PREFIX = { '藥品': '藥', '器材': '器', '耗材': '耗' };
@@ -30,17 +40,29 @@ const PREFIX = { '藥品': '藥', '器材': '器', '耗材': '耗' };
 // ---------------------------------------------------------------- 選單
 
 function onOpen() {
-  const menu = SpreadsheetApp.getUi().createMenu('🧪 實驗室管理');
-  let lastWasSeparator = true;
+  const ui = SpreadsheetApp.getUi();
+  const exists = function (fn) { return typeof globalThis[fn] === 'function'; };
+  const fill = function (menu, list) {
+    let count = 0, lastWasSeparator = true;
+    list.forEach(function (m) {
+      if (!m) {
+        if (!lastWasSeparator) menu.addSeparator();
+        lastWasSeparator = true;
+      } else if (exists(m[1])) {
+        menu.addItem(m[0], m[1]);
+        lastWasSeparator = false;
+        count++;
+      }
+    });
+    return count;
+  };
+  const menu = ui.createMenu('🧪 實驗室管理');
   MENU.forEach(function (m) {
-    if (!m) {
-      if (!lastWasSeparator) menu.addSeparator();
-      lastWasSeparator = true;
-      return;
-    }
-    if (typeof globalThis[m[1]] === 'function') {
+    if (Array.isArray(m[1])) {
+      const sub = ui.createMenu(m[0]);
+      if (fill(sub, m[1])) menu.addSubMenu(sub);
+    } else if (exists(m[1])) {
       menu.addItem(m[0], m[1]);
-      lastWasSeparator = false;
     }
   });
   menu.addToUi();
