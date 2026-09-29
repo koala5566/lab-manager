@@ -232,7 +232,7 @@ function saveCount(opts) {
     need_(t, COUNT_HEADER);
     const c = t.col;
     const dateValue = Utilities.parseDate(opts.date, tz_(), 'yyyy-MM-dd');
-    const stamp = Utilities.formatDate(new Date(), tz_(), 'yyyy/MM/dd HH:mm');
+    const stamp = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy/MM/dd HH:mm');   // 登錄時間一律用台灣時間
 
     const save = [], keep = [];
     t.rows.forEach(function (r) {

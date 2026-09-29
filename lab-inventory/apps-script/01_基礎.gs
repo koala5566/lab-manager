@@ -43,6 +43,22 @@ function onOpen() {
     }
   });
   menu.addToUi();
+  checkTimeZone_();
+}
+
+const SCHOOL_TZ = 'Asia/Taipei';
+
+/**
+ * 試算表時區不是台北時，自動改成台北（從 Excel 轉來的檔案常是別的時區，會讓時間差好幾小時）。
+ * 已經存在的日期格子是「日曆日期」，改時區不會讓它們變動。
+ */
+function checkTimeZone_() {
+  const ss = SpreadsheetApp.getActive();
+  if (ss.getSpreadsheetTimeZone() === SCHOOL_TZ) return;
+  const old = ss.getSpreadsheetTimeZone();
+  ss.setSpreadsheetTimeZone(SCHOOL_TZ);
+  tzCache_ = null;
+  ss.toast('試算表時區原本是「' + old + '」，已自動改為台北時間。', '時區已修正', 10);
 }
 
 // ---------------------------------------------------------------- 共用：讀工作表
