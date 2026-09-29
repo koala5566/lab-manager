@@ -1,31 +1,40 @@
 /**
  * 實驗室藥品器材耗材管理系統 — 列印報表（第 5 步）
  *
- * 選單「列印藥品清單」「列印器材耗材清單」→ 在新分頁開啟列印頁 → 按「🖨 列印」。
+ * 選單「列印藥品清單」「列印器材耗材清單」→ 在試算表裡開啟列印預覽對話框 → 按「🖨 列印」。
  * A4 直式、每頁重複表頭（學校、清單名稱、學年度學期、更新日期、欄位名稱），
  * 每頁頁尾核章欄（依「設定」的核章欄）。「自己筆記」不會印出。
- * 列印頁透過第 4 步部署的網頁應用程式開啟（網址 ?page=print）。
+ * 列印頁也可以用網頁網址 ?page=print 開啟（瀏覽器只登入一個 Google 帳號時）。
  * 需要「01_基礎」「03_手機盤點」。
  */
 
 // ---------------------------------------------------------------- 選單
 
 function printDrugList() {
-  const url = webAppUrl_();
-  if (!url) return;
-  const html = DIALOG_STYLE + `
-    <p>按下按鈕，會在瀏覽器新分頁開啟「藥品清單」列印頁（約 5～10 秒）。</p>
-    <p class="hint">開啟後按頁面上方的「🖨 列印」。</p>
-    <div class="btns"><button onclick="google.script.host.close()">取消</button>
-      <button class="primary" onclick="window.open(D, '_blank'); google.script.host.close();">開啟列印頁</button></div>
-    <p class="hint">沒有反應？<a id="a" target="_blank">點這裡開啟</a></p>
-    <script>const D = __DATA__; document.getElementById('a').href = D;</script>`;
-  showDialog_(html, url + '?page=print&r=drug', '列印藥品清單', 220);
+  showPrintDialog({ page: 'print', r: 'drug' });
 }
 
+/**
+ * 在試算表裡開一個大對話框顯示列印頁（不經過網頁網址，所以瀏覽器登入好幾個 Google 帳號也能開）。
+ * p.page = 'print' → page_print(p)；'labels' → page_labels(p)（第 6 步）。
+ */
+function showPrintDialog(p) {
+  const fn = /^\w+$/.test(String(p.page)) ? globalThis['page_' + p.page] : null;
+  if (typeof fn !== 'function') throw new Error('找不到列印功能「' + p.page + '」，請確認程式檔都有貼上。');
+  const out = fn(p).setWidth(1150).setHeight(780);
+  SpreadsheetApp.getUi().showModalDialog(out, '列印預覽（按上方「🖨 列印」）');
+}
+
+/** 對話框裡的「開啟列印頁」：請伺服器改開列印預覽對話框。 */
+const OPEN_PRINT_JS = `
+  function openPrint(p, btn) {
+    btn.disabled = true; btn.textContent = '產生中，約 5～10 秒…';
+    google.script.run.withFailureHandler(function (e) {
+      alert(e.message); btn.disabled = false; btn.textContent = '開啟列印頁';
+    }).showPrintDialog(p);
+  }`;
+
 function printEquipmentList() {
-  const url = webAppUrl_();
-  if (!url) return;
   const zones = getSettings_().zones
     .filter(function (z) { return String(z['列印格式']) !== '藥品'; })
     .map(function (z) { return String(z['清單分區']); });
@@ -34,8 +43,8 @@ function printEquipmentList() {
     <label class="inline"><input type="checkbox" id="all" checked onchange="toggle(this.checked)"> <b>全選</b></label>
     <div id="list"></div>
     <div class="btns"><button onclick="google.script.host.close()">取消</button>
-      <button class="primary" onclick="go()">開啟列印頁</button></div>
-    <script>
+      <button class="primary" onclick="go(this)">開啟列印頁</button></div>
+    <script>${OPEN_PRINT_JS}
       const D = __DATA__;
       D.zones.forEach(function (z) {
         const l = document.createElement('label'); l.className = 'inline';
@@ -44,15 +53,14 @@ function printEquipmentList() {
         document.getElementById('list').appendChild(l);
       });
       function toggle(on) { document.querySelectorAll('#list input').forEach(function (c) { c.checked = on; }); }
-      function go() {
+      function go(btn) {
         const z = Array.prototype.filter.call(document.querySelectorAll('#list input'), function (c) { return c.checked; })
           .map(function (c) { return c.value; });
         if (!z.length) { alert('請至少勾選一個分區。'); return; }
-        window.open(D.url + '?page=print&r=equip&z=' + encodeURIComponent(z.join('|')), '_blank');
-        google.script.host.close();
+        openPrint({ page: 'print', r: 'equip', z: z.join('|') }, btn);
       }
     </script>`;
-  showDialog_(html, { url: url, zones: zones }, '列印器材耗材清單', 120 + zones.length * 30);
+  showDialog_(html, { zones: zones }, '列印器材耗材清單', 120 + zones.length * 30);
 }
 
 // ---------------------------------------------------------------- 申報清單（期初／期末）
@@ -78,8 +86,6 @@ function termFromName_(name) {
 }
 
 function printDeclaration() {
-  const url = webAppUrl_();
-  if (!url) return;
   const settings = getSettings_();
   const recs = getTable_('盤點紀錄');
   need_(recs, ['盤點日期', '盤點名稱']);
@@ -98,8 +104,8 @@ function printDeclaration() {
     <p class="hint">每個品項只印一欄數量：該次盤點的數字（那次沒點到的，印之前最近一次）。</p>
     <label>要印的清單（依簽文順序）</label><div id="list"></div>
     <div class="btns"><button onclick="google.script.host.close()">取消</button>
-      <button class="primary" onclick="go()">開啟列印頁</button></div>
-    <script>
+      <button class="primary" onclick="go(this)">開啟列印頁</button></div>
+    <script>${OPEN_PRINT_JS}
       const D = __DATA__;
       const ev = document.getElementById('ev');
       D.events.forEach(function (e, i) { ev.add(new Option(e.label, i)); });
@@ -111,20 +117,19 @@ function printDeclaration() {
         l.appendChild(c); l.appendChild(document.createTextNode(' ' + z.name));
         document.getElementById('list').appendChild(l);
       });
-      function go() {
+      function go(btn) {
         const z = Array.prototype.filter.call(document.querySelectorAll('#list input'), function (c) { return c.checked; })
           .map(function (c) { return c.value; });
         if (!z.length) { alert('請至少勾選一份清單。'); return; }
-        window.open(D.url + '?page=print&r=decl&d=' + D.events[ev.value].k + '&t=' +
-          encodeURIComponent(document.getElementById('term').value) + '&z=' + encodeURIComponent(z.join('|')), '_blank');
-        google.script.host.close();
+        openPrint({ page: 'print', r: 'decl', d: D.events[ev.value].k, t: document.getElementById('term').value,
+          z: z.join('|') }, btn);
       }
     </script>`;
   if (!events.length) {
     SpreadsheetApp.getUi().alert('盤點紀錄是空的，沒有可以申報的盤點。');
     return;
   }
-  showDialog_(html, { url: url, events: events, lists: lists }, '列印申報清單（期初／期末）', 330 + lists.length * 28);
+  showDialog_(html, { events: events, lists: lists }, '列印申報清單（期初／期末）', 330 + lists.length * 28);
 }
 
 /** 每個品項只留「截至 asOf 那天」最近一次的盤點（日期統一標成 asOf）。 */

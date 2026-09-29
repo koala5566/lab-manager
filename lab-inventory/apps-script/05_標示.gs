@@ -1,7 +1,7 @@
 /**
  * 實驗室藥品器材耗材管理系統 — 藥品櫃標示（第 6 步）
  *
- * 選單「列印藥品櫃標示」→ 選櫃內版或櫃外版、選櫃子 → 在新分頁開啟 → 「🖨 列印」。
+ * 選單「列印藥品櫃標示」→ 選櫃內版或櫃外版、選櫃子 → 開啟列印預覽對話框 → 「🖨 列印」。
  * 依「品項」中藥品清單的櫃別與排序位置（例：A 櫃 3-2 ＝ 第 3 排第 2 個）自動排版，每格印品名與化學式。
  *   ・櫃內版：A4 直式，所有櫃子接著印，字較小
  *   ・櫃外版：A4 橫式，一櫃一頁，字較大，右上角印教室與更新日期
@@ -15,8 +15,6 @@ const LABEL_PER_LINE = 10;   // 一排超過 10 個時換行接著印
 // ---------------------------------------------------------------- 選單
 
 function printCabinetLabels() {
-  const url = webAppUrl_();
-  if (!url) return;
   const cabs = Object.keys(labelCabinets_()).sort(cabinetCompare_);
   if (!cabs.length) {
     SpreadsheetApp.getUi().alert('藥品清單中沒有「排序位置」是「排-位」格式（例：3-2）的品項，無法產生標示。');
@@ -30,8 +28,8 @@ function printCabinetLabels() {
     <label class="inline"><input type="checkbox" id="all" checked onchange="toggle(this.checked)"> <b>全選</b></label>
     <div id="list"></div>
     <div class="btns"><button onclick="google.script.host.close()">取消</button>
-      <button class="primary" onclick="go()">開啟列印頁</button></div>
-    <script>
+      <button class="primary" onclick="go(this)">開啟列印頁</button></div>
+    <script>${OPEN_PRINT_JS}
       const D = __DATA__;
       D.cabs.forEach(function (c) {
         const l = document.createElement('label'); l.className = 'inline'; l.style.display = 'inline-block'; l.style.width = '30%';
@@ -40,16 +38,15 @@ function printCabinetLabels() {
         document.getElementById('list').appendChild(l);
       });
       function toggle(on) { document.querySelectorAll('#list input').forEach(function (c) { c.checked = on; }); }
-      function go() {
+      function go(btn) {
         const c = Array.prototype.filter.call(document.querySelectorAll('#list input'), function (x) { return x.checked; })
           .map(function (x) { return x.value; });
         if (!c.length) { alert('請至少勾選一個櫃子。'); return; }
         const v = document.querySelector('input[name=v]:checked').value;
-        window.open(D.url + '?page=labels&v=' + v + '&c=' + encodeURIComponent(c.join('|')), '_blank');
-        google.script.host.close();
+        openPrint({ page: 'labels', v: v, c: c.join('|') }, btn);
       }
     </script>`;
-  showDialog_(html, { url: url, cabs: cabs }, '列印藥品櫃標示', 300 + Math.ceil(cabs.length / 3) * 28);
+  showDialog_(html, { cabs: cabs }, '列印藥品櫃標示', 300 + Math.ceil(cabs.length / 3) * 28);
 }
 
 // ---------------------------------------------------------------- 列印頁（網址 ?page=labels）
