@@ -15,6 +15,7 @@ const MENU = [
   null,
   ['列印藥品清單', 'printDrugList'],
   ['列印器材耗材清單', 'printEquipmentList'],
+  ['列印申報清單（期初／期末）', 'printDeclaration'],
   ['列印藥品櫃標示', 'printCabinetLabels'],
   ['列印需補充清單', 'printRestockList'],
   null,
