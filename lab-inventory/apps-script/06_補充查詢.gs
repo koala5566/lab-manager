@@ -122,6 +122,50 @@ function setupQuerySheet_(items) {
   [8, 6, 8, 11, 24, 16, 12, 11, 7, 14, 6, 11, 8, 16, 8, 7, 20].forEach(function (w, i) { sh.setColumnWidth(i + 1, w * 8); });
 }
 
+// ---------------------------------------------------------------- 套用安全存量建議（一次性）
+
+/**
+ * 把「安全存量建議」工作表（由 安全存量建議.xlsx 匯入）裡「採用」為 TRUE 的列，
+ * 填進「品項」的「安全存量」。品項已經有填安全存量的不覆蓋。
+ * 執行方式：Apps Script 上方函式選單選 applySafetyStock → ▶ 執行。
+ */
+function applySafetyStock() {
+  const ss = SpreadsheetApp.getActive();
+  if (!ss.getSheetByName('安全存量建議')) {
+    throw new Error('找不到「安全存量建議」工作表。請先「檔案 → 匯入」安全存量建議.xlsx，匯入位置選「插入新工作表」。');
+  }
+  const sug = getTable_('安全存量建議');
+  need_(sug, ['採用', '編號', '建議安全存量']);
+  const items = getTable_('品項');
+  need_(items, ['編號', '安全存量']);
+  const rowOf = {};
+  items.rows.forEach(function (r, i) { rowOf[String(r[items.col['編號']]).trim()] = i; });
+  const col = items.col['安全存量'];
+  const values = items.rows.map(function (r) { return [r[col]]; });
+  let set = 0, kept = 0, skipped = 0, missing = 0;
+  sug.rows.forEach(function (r) {
+    const on = r[sug.col['採用']];
+    const code = String(r[sug.col['編號']]).trim();
+    const v = r[sug.col['建議安全存量']];
+    if (!code) return;
+    if (!(on === true || /^(TRUE|是|✔|V|Y)$/i.test(String(on).trim())) || !isNumber_(v)) { skipped++; return; }
+    if (!(code in rowOf)) { missing++; return; }
+    const cur = values[rowOf[code]][0];
+    if (String(cur).trim() !== '') { kept++; return; }
+    values[rowOf[code]][0] = Number(v);
+    set++;
+  });
+  if (items.rows.length) items.sheet.getRange(2, col + 1, items.rows.length, 1).setValues(values);
+  const n = restockItems_().length;
+  const msg = '已填入 ' + set + ' 個品項的安全存量。' +
+    (kept ? '\n原本已有安全存量、沒有覆蓋：' + kept + ' 個。' : '') +
+    (skipped ? '\n不採用（FALSE）或沒有數字：' + skipped + ' 個。' : '') +
+    (missing ? '\n品項找不到編號：' + missing + ' 個。' : '') +
+    '\n\n目前低於安全存量：' + n + ' 個（見「需補充清單」）。\n「安全存量建議」工作表確認完可以刪除。';
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { Logger.log(msg); }
+  return msg;
+}
+
 // ---------------------------------------------------------------- 列印需補充清單
 
 function printRestockList() {
