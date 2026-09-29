@@ -65,6 +65,31 @@ function mobileSave(item) {
   }
 }
 
+/** 手機「完成盤點」：用電腦產生盤點表時設定的日期與名稱，存進盤點紀錄。 */
+function mobileFinish(mode) {
+  const info = JSON.parse(PropertiesService.getDocumentProperties().getProperty('count') || '{}');
+  if (!info.date) throw new Error('找不到這次盤點的日期，請在電腦上按「完成盤點」。');
+  return saveCount({ date: info.date, name: info.name || '', mode: mode === 'carry' ? 'carry' : 'keep' });
+}
+
+/** 手機「需補充」分頁：低於安全存量的品項（需要 06_補充查詢）。 */
+function mobileRestock() {
+  if (typeof restockItems_ !== 'function') return { ok: false, rows: [] };
+  return {
+    ok: true,
+    rows: restockItems_().map(function (it) {
+      return {
+        name: String(it['品名']), spec: String(it['化學式或規格']), zone: String(it['清單分區']),
+        loc: [it['教室'], it['櫃別'], it['清單分區'] === '藥品清單' ? it['排序位置'] : '']
+          .filter(function (x) { return String(x).trim(); }).join(' '),
+        unit: String(it['單位']), qty: String(it['最新數量說明'] || numText_(it['最新數量'])),
+        date: String(it['最新盤點日期']), safe: numText_(it['安全存量']),
+        need: numText_(round_(Number(it['安全存量']) - Number(it['最新數量']))),
+      };
+    }),
+  };
+}
+
 /** 手機查詢品項（最多 60 筆）。 */
 function mobileSearch(q) {
   const items = getTable_('品項');
@@ -154,18 +179,31 @@ const MOBILE_HTML = `<!DOCTYPE html>
   .st { font-size: 13px; min-height: 18px; margin-top: 4px; }
   .st.ok { color: #188038; } .st.err { color: #d93025; } .st.ing { color: #888; }
   .empty { text-align: center; color: #666; padding: 40px 10px; line-height: 1.8; }
+  .fin { margin-top: 10px; padding: 10px; border: 1px solid #c9d1d9; border-radius: 10px; background: #f6fef9; font-size: 15px; }
+  .fin .row button { font-size: 16px; padding: 10px; }
+  .card.need { border-left-color: #d93025; }
+  .needn { color: #d93025; font-weight: 600; }
+  .tabs button { font-size: 15px; }
   label.chk { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-top: 8px; }
   label.chk input { width: auto; }
 </style></head>
 <body>
 <header>
-  <div class="tabs"><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tFind" onclick="tab('find')">查詢</button></div>
+  <div class="tabs"><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tNeed" onclick="tab('need')">需補充</button><button id="tFind" onclick="tab('find')">查詢</button></div>
   <div id="hCount">
     <div class="title" id="title">載入中…</div>
     <div class="filters"><select id="room" onchange="onRoom()"></select><select id="cab" onchange="render()"></select></div>
     <label class="chk"><input type="checkbox" id="todo" onchange="render()"> 只看還沒盤的</label>
     <div class="bar"><div id="bar"></div></div>
-    <div class="meta"><span id="prog"></span><a href="#" onclick="load();return false;">重新整理</a></div>
+    <div class="meta"><span id="prog"></span><span><a href="#" onclick="load();return false;">重新整理</a>　<a href="#" id="finBtn" onclick="openFinish();return false;">✔ 完成盤點</a></span></div>
+    <div id="finBox" class="fin" style="display:none">
+      <div id="finInfo"></div>
+      <label class="chk"><input type="radio" name="fm" value="keep" checked> 沒填的留著，下次繼續盤</label>
+      <label class="chk"><input type="radio" name="fm" value="carry"> 沒填的沿用上次數量一起存</label>
+      <div class="row"><button onclick="document.getElementById('finBox').style.display='none'">取消</button>
+        <button id="finGo" style="flex:1;background:#188038;color:#fff;border:none" onclick="doFinish()">存入盤點紀錄</button></div>
+      <div id="finMsg" class="st"></div>
+    </div>
   </div>
   <div id="hFind" style="display:none">
     <input id="kw" placeholder="品名、化學式或編號" onkeydown="if(event.key==='Enter')find()">
@@ -174,6 +212,7 @@ const MOBILE_HTML = `<!DOCTYPE html>
   </div>
 </header>
 <main id="mCount"></main>
+<main id="mNeed" style="display:none"></main>
 <main id="mFind" style="display:none"></main>
 <script>
 var D = null;
@@ -182,14 +221,60 @@ function uniq(a) { var s = {}, o = []; a.forEach(function (x) { if (!s[x]) { s[x
 function fail(e) { document.getElementById('mCount').innerHTML = ''; document.getElementById('mCount').appendChild(el('div', 'empty', '讀取失敗：' + (e && e.message ? e.message : e))); }
 
 function tab(t) {
-  var c = t === 'count';
-  document.getElementById('tCount').className = c ? 'on' : '';
-  document.getElementById('tFind').className = c ? '' : 'on';
-  document.getElementById('hCount').style.display = c ? '' : 'none';
-  document.getElementById('mCount').style.display = c ? '' : 'none';
-  document.getElementById('hFind').style.display = c ? 'none' : '';
-  document.getElementById('mFind').style.display = c ? 'none' : '';
-  if (!c && !document.getElementById('fCat').options.length) find();
+  var show = function (id, on) { document.getElementById(id).style.display = on ? '' : 'none'; };
+  document.getElementById('tCount').className = t === 'count' ? 'on' : '';
+  document.getElementById('tNeed').className = t === 'need' ? 'on' : '';
+  document.getElementById('tFind').className = t === 'find' ? 'on' : '';
+  show('hCount', t === 'count'); show('mCount', t === 'count');
+  show('mNeed', t === 'need');
+  show('hFind', t === 'find'); show('mFind', t === 'find');
+  if (t === 'find' && !document.getElementById('fCat').options.length) find();
+  if (t === 'need') need();
+}
+
+function need() {
+  var m = document.getElementById('mNeed');
+  m.innerHTML = ''; m.appendChild(el('div', 'empty', '讀取中…'));
+  google.script.run.withSuccessHandler(function (res) {
+    m.innerHTML = '';
+    if (!res.ok) { m.appendChild(el('div', 'empty', '還沒有安裝需補充清單的程式（06_補充查詢）。')); return; }
+    if (!res.rows.length) { m.appendChild(el('div', 'empty', '目前沒有低於安全存量的品項 👍')); return; }
+    m.appendChild(el('h3', '', '低於安全存量：' + res.rows.length + ' 項'));
+    res.rows.forEach(function (r) {
+      var c = el('div', 'card need');
+      var t = el('div'); t.appendChild(el('span', 'name', r.name)); if (r.spec) t.appendChild(el('span', 'spec', r.spec));
+      c.appendChild(t);
+      c.appendChild(el('div', 'loc', r.zone + '　' + r.loc));
+      var l = el('div', 'last');
+      l.appendChild(document.createTextNode('目前 ' + r.qty + ' ' + r.unit + '（' + r.date + '）　安全存量 ' + r.safe + '　'));
+      l.appendChild(el('span', 'needn', '建議補 ' + r.need));
+      c.appendChild(l);
+      m.appendChild(c);
+    });
+  }).withFailureHandler(function (e) { m.innerHTML = ''; m.appendChild(el('div', 'empty', '讀取失敗：' + (e.message || e))); })
+    .mobileRestock();
+}
+
+function openFinish() {
+  if (!D || !D.rows.length) return;
+  var done = D.rows.filter(filled).length;
+  document.getElementById('finInfo').textContent = D.name + '（' + D.date + '）已盤 ' + done + '／' + D.rows.length + ' 列';
+  document.getElementById('finMsg').textContent = '';
+  document.getElementById('finBox').style.display = '';
+}
+
+function doFinish() {
+  var b = document.getElementById('finGo'), msg = document.getElementById('finMsg');
+  var mode = document.querySelector('input[name=fm]:checked').value;
+  b.disabled = true; b.textContent = '儲存中（含備份，約 10 秒）…';
+  google.script.run.withSuccessHandler(function (text) {
+    msg.className = 'st ok'; msg.textContent = '✔ ' + text;
+    b.disabled = false; b.textContent = '存入盤點紀錄';
+    setTimeout(function () { document.getElementById('finBox').style.display = 'none'; load(); }, 4000);
+  }).withFailureHandler(function (e) {
+    msg.className = 'st err'; msg.textContent = '⚠ ' + (e.message || e);
+    b.disabled = false; b.textContent = '存入盤點紀錄';
+  }).mobileFinish(mode);
 }
 
 function load() {

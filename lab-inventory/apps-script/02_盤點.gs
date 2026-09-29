@@ -148,6 +148,7 @@ function lastCounts_() {
 function writeCountSheet_(rows) {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName('盤點表') || ss.insertSheet('盤點表');
+  if (sh.getFilter()) sh.getFilter().remove();
   sh.clear();
   sh.clearConditionalFormatRules();
   sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
@@ -178,6 +179,8 @@ function writeCountSheet_(rows) {
   [10, 12, 8, 12, 22, 16, 5, 9, 8, 14, 9, 14, 5, 8, 10].forEach(function (w, i) {
     sh.setColumnWidth(i + 1, w * 8);
   });
+  // 篩選器：標題列出現小漏斗，可以只看某個教室、櫃別，或「已盤」空白（還沒盤的）
+  sh.getRange(1, 1, rows.length + 1, n).createFilter();
   return sh;
 }
 

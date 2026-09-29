@@ -15,6 +15,10 @@ const MENU = [
     ['完成盤點（存入盤點紀錄）', 'finishCount'],
     ['開啟手機盤點網址', 'showMobileLink'],
   ]],
+  ['📦 品項', [
+    ['新增品項', 'addItemDialog'],
+    ['登記異動（新購／領用／報廢／移位）', 'movementDialog'],
+  ]],
   ['🖨 列印', [
     ['藥品清單', 'printDrugList'],
     ['器材耗材清單', 'printEquipmentList'],
