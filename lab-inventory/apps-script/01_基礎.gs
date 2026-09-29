@@ -29,8 +29,13 @@ const MENU = [
     null,
     ['列印請購清單', 'printPurchaseList'],
   ]],
-  ['🧪 實驗準備', [
-    ['新增實驗排程', 'experimentDialog'],
+  ['🗓 實驗室使用', [
+    ['登記使用（一週課表）', 'bookDialog'],
+    ['六間實驗室使用一覽', 'usageBoard'],
+    null,
+    ['列印門口海報（A4 橫式）', 'printPosterDialog'],
+    ['列印本週課表（A4 直式）', 'printLabWeekDialog'],
+    null,
     ['列印實驗準備單', 'printPrepDialog'],
     ['實驗套組庫存檢核', 'printKitCheck'],
   ]],

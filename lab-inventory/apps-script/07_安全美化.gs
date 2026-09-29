@@ -26,8 +26,8 @@ function setupEnhancements() {
   const step = function (name, fn) {
     try { fn(); done.push('✔ ' + name); } catch (e) { done.push('✘ ' + name + '：' + e.message); }
   };
-  step('請購清單、借用紀錄、實驗排程工作表', function () {
-    ['setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_'].forEach(function (fn) {
+  step('請購清單、借用紀錄、實驗排程工作表、實驗室使用設定', function () {
+    ['ensureLabSettings_', 'setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_'].forEach(function (fn) {
       if (typeof globalThis[fn] === 'function') globalThis[fn]();
     });
   });
@@ -330,7 +330,7 @@ function setupDashboard_() {
   const rq = col('請購清單', '狀態');
   if (rq) cards2.push(['待處理請購', '=COUNTIF(' + rq + ',"待處理")', '="已請購 "&COUNTIF(' + rq + ',"已請購")&" 項等待到貨"', '#FF6D01']);
   const ed = col('實驗排程', '日期'), es = col('實驗排程', '狀態');
-  if (ed && es) cards2.push(['7 天內實驗', '=COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"<>取消",' + es + ',"<>已歸還")',
+  if (ed && es) cards2.push(['7 天內實驗室使用', '=COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"<>取消",' + es + ',"<>已歸還")',
     '="其中待準備 "&COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"待準備")&" 個"', '#E37400']);
   const ls = col('借用紀錄', '狀態'), ld = col('借用紀錄', '預計歸還');
   if (ls && ld) cards2.push(['借出中', '=COUNTIF(' + ls + ',"借出中")',
@@ -345,7 +345,8 @@ function setupDashboard_() {
     ['盤點', '📋 盤點 → 產生盤點表 → 電腦填黃色欄位，或手機開盤點網頁 → 📋 盤點 → 完成盤點'],
     ['申報', '🖨 列印 → 申報清單（期初／期末）→ 選那次盤點 → 🖨 列印；簽稿文字在預覽上方'],
     ['請購', '🛒 請購 → 新增請購需求／從需補充清單加入 → 狀態改「已請購」→ 到貨時 🛒 請購 → 到貨入庫（自動加庫存）'],
-    ['實驗準備', '🧪 實驗準備 → 新增實驗排程 → 列印實驗準備單（需要總數對照庫存，附準備／歸還打勾欄）'],
+    ['實驗室使用', '🗓 實驗室使用 → 登記使用（點課表格子）→ 列印門口海報／本週課表；六間使用一覽看今天誰在用'],
+    ['實驗準備', '🗓 實驗室使用 → 列印實驗準備單（需要總數對照庫存，附準備／歸還打勾欄）'],
     ['新增／異動', '📦 品項 → 新增品項；新購、領用、報廢、移位用 📦 品項 → 登記異動（不要刪列）'],
     ['借用', '📦 品項 → 借出登記／歸還登記；逾期會在首頁與「借用紀錄」標紅'],
     ['備份', '每週五 17:00 自動備份；完成盤點後也會備份；要馬上備份：🔧 維護 → 立即備份'],

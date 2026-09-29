@@ -10,11 +10,11 @@
  */
 
 const EXP_SHEET = '實驗排程';
-const EXP_COLS = ['日期', '節次', '班級', '教師', '教室', '實驗名稱', '組數', '狀態', '備註'];
+const EXP_COLS = ['日期', '節次', '班級', '教師', '教室', '實驗名稱', '組數', '狀態', '備註', '用途類型'];
 const EXP_STATUS = ['待準備', '已準備', '已歸還', '取消'];
 
 function setupExperimentSheet_() {
-  const t = ensureSheet_(EXP_SHEET, EXP_COLS, [11, 7, 8, 9, 13, 20, 6, 8, 24], '#FBBC04');
+  const t = ensureSheet_(EXP_SHEET, EXP_COLS, [11, 7, 8, 9, 13, 20, 6, 8, 24, 10], '#FBBC04');
   const sh = t.sheet, c = t.col, n = sh.getMaxRows() - 1;
   sh.getRange(2, c['狀態'] + 1, n, 1).setDataValidation(listRule_(EXP_STATUS));
   sh.getRange(2, c['日期'] + 1, n, 1).setNumberFormat('yyyy/mm/dd');
@@ -23,9 +23,13 @@ function setupExperimentSheet_() {
     sh.getRange(2, c['實驗名稱'] + 1, n, 1).setDataValidation(SpreadsheetApp.newDataValidation()
       .requireValueInRange(kit.getRange('A2:A'), true).setAllowInvalid(true).build());
   }
-  const rooms = getSettings_().lists['教室'] || [];
+  const st = getSettings_();
+  const rooms = st.lists['上課教室'] || st.lists['教室'] || [];
   if (rooms.length) sh.getRange(2, c['教室'] + 1, n, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(rooms, true).setAllowInvalid(true).build());
+  const types = st.lists['用途類型'] || [];
+  if (types.length && '用途類型' in c) sh.getRange(2, c['用途類型'] + 1, n, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(types, true).setAllowInvalid(true).build());
   const all = sh.getRange(2, 1, n, sh.getLastColumn());
   const S = '$' + colLetter_(c['狀態'] + 1), D = '$' + colLetter_(c['日期'] + 1);
   sh.setConditionalFormatRules([
@@ -47,7 +51,11 @@ function kits_() {
   t.rows.forEach(function (r) {
     const k = String(r[c['套組名稱']]).trim();
     if (!k || !String(r[c['品名']]).trim()) return;
-    if (!map[k]) { map[k] = { name: k, grade: String(r[c['課程年級']] || ''), groups: Number(r[c['組數']]) || 0, items: [] }; order.push(k); }
+    if (!map[k]) {
+      map[k] = { name: k, grade: String(r[c['課程年級']] || ''), groups: Number(r[c['組數']]) || 0, items: [], link: '' };
+      order.push(k);
+    }
+    if (!map[k].link && '講義連結' in c && String(r[c['講義連結']]).trim()) map[k].link = String(r[c['講義連結']]).trim();
     if (!map[k].groups && Number(r[c['組數']])) map[k].groups = Number(r[c['組數']]);
     const per = isNumber_(r[c['每組數量']]) ? Number(r[c['每組數量']]) : parseQty_(r[c['每組數量說明']]).n;
     map[k].items.push({ code: String(r[c['編號']] || '').trim(), name: String(r[c['品名']]).trim(), per: per === '' ? '' : Number(per),
@@ -125,7 +133,7 @@ function experimentDialog() {
 function addExperiment(f) {
   const t = setupExperimentSheet_();
   appendRow_(t, { '日期': dateValue_(f['日期']), '節次': f['節次'], '班級': f['班級'], '教師': f['教師'], '教室': f['教室'],
-    '實驗名稱': f['實驗名稱'], '組數': f['組數'] ? Number(f['組數']) : '', '狀態': '待準備', '備註': f['備註'] });
+    '實驗名稱': f['實驗名稱'], '組數': f['組數'] ? Number(f['組數']) : '', '狀態': '待準備', '備註': f['備註'], '用途類型': '實驗課' });
   const check = experimentCheck_(f['實驗名稱'], Number(f['組數']) || 0);
   const short = check ? check.rows.filter(function (x) { return x.short; }) : [];
   return '已新增：' + rocText_(f['日期']) + ' ' + (f['班級'] || '') + ' ' + f['實驗名稱'] + (f['組數'] ? '（' + f['組數'] + ' 組）' : '') +
@@ -195,7 +203,10 @@ function page_prep(p) {
     const from = dateKey_(p.from) || today_(), to = dateKey_(p.to) || '9999-12-31';
     t.rows.filter(function (r) {
       const k = dateKey_(r[c['日期']]), st = String(r[c['狀態']]).trim();
-      return k && k >= from && k <= to && (st === '待準備' || st === '已準備' || st === '');
+      const type = '用途類型' in c ? String(r[c['用途類型']]).trim() : '';
+      // 準備單只印實驗課、補做實驗（社團、自主學習等不用準備器材）
+      return k && k >= from && k <= to && (st === '待準備' || st === '已準備' || st === '') &&
+        (!type || type === '實驗課' || type === '補做實驗');
     }).sort(function (a, b) {
       return dateKey_(a[c['日期']]) < dateKey_(b[c['日期']]) ? -1 : dateKey_(a[c['日期']]) > dateKey_(b[c['日期']]) ? 1 :
         naturalCompare_(a[c['節次']], b[c['節次']]);
