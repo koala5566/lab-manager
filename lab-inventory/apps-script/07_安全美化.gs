@@ -26,6 +26,11 @@ function setupEnhancements() {
   const step = function (name, fn) {
     try { fn(); done.push('✔ ' + name); } catch (e) { done.push('✘ ' + name + '：' + e.message); }
   };
+  step('請購清單、借用紀錄、實驗排程工作表', function () {
+    ['setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_'].forEach(function (fn) {
+      if (typeof globalThis[fn] === 'function') globalThis[fn]();
+    });
+  });
   step('首頁儀表板', setupDashboard_);
   step('分頁顏色與順序', arrangeTabs_);
   step('品項標色（低於安全存量、已淘汰、隔行底色）', styleItemSheet_);
@@ -195,10 +200,11 @@ function arrangeTabs_() {
   const ss = SpreadsheetApp.getActive();
   const order = [
     ['首頁', '#1A73E8'],
-    ['盤點表', '#FBBC04'], ['查詢', '#FBBC04'], ['需補充清單', '#34A853'],
+    ['盤點表', '#FBBC04'], ['實驗排程', '#FBBC04'], ['查詢', '#FBBC04'], ['需補充清單', '#34A853'],
+    ['請購清單', '#FF6D01'], ['借用紀錄', '#FF6D01'],
     ['品項', '#4285F4'], ['盤點紀錄', '#4285F4'], ['異動紀錄', '#4285F4'],
     ['實驗套組', '#A142F4'], ['玻片需求', '#A142F4'],
-    ['設定', '#9AA0A6'], ['轉入檢查', '#9AA0A6'], ['操作紀錄', '#9AA0A6'], ['安全存量建議', '#9AA0A6'],
+    ['設定', '#9AA0A6'], ['轉入檢查', '#9AA0A6'], ['操作紀錄', '#9AA0A6'], ['安全存量建議', '#9AA0A6'], ['危險分類建議', '#9AA0A6'],
   ];
   let pos = 1;
   order.forEach(function (x) {
@@ -296,45 +302,71 @@ function setupDashboard_() {
     ['未設安全存量', '=COUNTIFS(' + I('類別') + ',"<>器材",' + I('狀態') + ',"使用中",' + I('安全存量') + ',"")',
       '藥品＋耗材中還沒填的', '#5F6368'],
   ];
-  cards.forEach(function (card, i) {
-    const col = 2 + i;
-    sh.getRange(5, col).setValue(card[0]).setFontSize(11).setFontColor('#5F6368');
-    sh.getRange(6, col).setFormula(card[1]).setFontSize(26).setFontWeight('bold').setFontColor(card[3]);
-    const note = sh.getRange(7, col);
-    if (String(card[2]).charAt(0) === '=') note.setFormula(card[2]); else note.setValue(card[2]);
-    note.setFontSize(9).setFontColor('#80868B').setWrap(true);
-    sh.getRange(5, col, 3, 1).setBackground('#F8F9FA').setHorizontalAlignment('center')
-      .setBorder(true, true, true, true, null, null, '#DADCE0', SpreadsheetApp.BorderStyle.SOLID);
-  });
-  sh.setRowHeight(6, 48);
-  sh.setRowHeight(7, 34);
+  const drawCards = function (top, list) {
+    list.forEach(function (card, i) {
+      const col = 2 + i;
+      sh.getRange(top, col).setValue(card[0]).setFontSize(11).setFontColor('#5F6368');
+      sh.getRange(top + 1, col).setFormula(card[1]).setFontSize(26).setFontWeight('bold').setFontColor(card[3]);
+      const note = sh.getRange(top + 2, col);
+      if (String(card[2]).charAt(0) === '=') note.setFormula(card[2]); else note.setValue(card[2]);
+      note.setFontSize(9).setFontColor('#80868B').setWrap(true);
+      sh.getRange(top, col, 3, 1).setBackground('#F8F9FA').setHorizontalAlignment('center')
+        .setBorder(true, true, true, true, null, null, '#DADCE0', SpreadsheetApp.BorderStyle.SOLID);
+    });
+    sh.setRowHeight(top + 1, 48);
+    sh.setRowHeight(top + 2, 34);
+  };
+  drawCards(5, cards);
+
+  // 第二排：請購、實驗、借用（工作表存在才算）
+  const col = function (sheet, name) {
+    const x = ss.getSheetByName(sheet);
+    if (!x) return null;
+    const head = x.getRange(1, 1, 1, Math.max(1, x.getLastColumn())).getValues()[0].map(String);
+    const i = head.indexOf(name);
+    return i < 0 ? null : "'" + sheet + "'!" + colLetter_(i + 1) + '2:' + colLetter_(i + 1);
+  };
+  const cards2 = [];
+  const rq = col('請購清單', '狀態');
+  if (rq) cards2.push(['待處理請購', '=COUNTIF(' + rq + ',"待處理")', '="已請購 "&COUNTIF(' + rq + ',"已請購")&" 項等待到貨"', '#FF6D01']);
+  const ed = col('實驗排程', '日期'), es = col('實驗排程', '狀態');
+  if (ed && es) cards2.push(['7 天內實驗', '=COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"<>取消",' + es + ',"<>已歸還")',
+    '="其中待準備 "&COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"待準備")&" 個"', '#E37400']);
+  const ls = col('借用紀錄', '狀態'), ld = col('借用紀錄', '預計歸還');
+  if (ls && ld) cards2.push(['借出中', '=COUNTIF(' + ls + ',"借出中")',
+    '=IF(COUNTIFS(' + ls + ',"借出中",' + ld + ',"<"&TODAY(),' + ld + ',"<>")>0,"⚠ 逾期 "&COUNTIFS(' + ls + ',"借出中",' + ld +
+    ',"<"&TODAY(),' + ld + ',"<>")&" 筆","沒有逾期")', '#A142F4']);
+  let top = 9;
+  if (cards2.length) { drawCards(9, cards2); top = 13; }
 
   // 常用操作
-  sh.getRange('B9:G9').merge().setValue('常用操作（上方選單「🧪 實驗室管理」）').setFontSize(13).setFontWeight('bold');
+  sh.getRange(top, 2, 1, 6).merge().setValue('常用操作（上方選單「🧪 實驗室管理」）').setFontSize(13).setFontWeight('bold');
   const howto = [
     ['盤點', '📋 盤點 → 產生盤點表 → 電腦填黃色欄位，或手機開盤點網頁 → 📋 盤點 → 完成盤點'],
     ['申報', '🖨 列印 → 申報清單（期初／期末）→ 選那次盤點 → 🖨 列印；簽稿文字在預覽上方'],
-    ['請購', '看「需補充清單」，或 🖨 列印 → 需補充清單'],
-    ['新增品項', '到「品項」最下面：先選類別、再填品名，編號自動產生'],
-    ['淘汰品項', '「品項」的狀態改成「已淘汰」（不要刪列）'],
+    ['請購', '🛒 請購 → 新增請購需求／從需補充清單加入 → 狀態改「已請購」→ 到貨時 🛒 請購 → 到貨入庫（自動加庫存）'],
+    ['實驗準備', '🧪 實驗準備 → 新增實驗排程 → 列印實驗準備單（需要總數對照庫存，附準備／歸還打勾欄）'],
+    ['新增／異動', '📦 品項 → 新增品項；新購、領用、報廢、移位用 📦 品項 → 登記異動（不要刪列）'],
+    ['借用', '📦 品項 → 借出登記／歸還登記；逾期會在首頁與「借用紀錄」標紅'],
     ['備份', '每週五 17:00 自動備份；完成盤點後也會備份；要馬上備份：🔧 維護 → 立即備份'],
   ];
   howto.forEach(function (h, i) {
-    sh.getRange(10 + i, 2).setValue(h[0]).setFontWeight('bold').setFontColor('#1A73E8');
-    sh.getRange(10 + i, 3, 1, 5).merge().setValue(h[1]).setFontColor('#3C4043');
+    sh.getRange(top + 1 + i, 2).setValue(h[0]).setFontWeight('bold').setFontColor('#1A73E8');
+    sh.getRange(top + 1 + i, 3, 1, 5).merge().setValue(h[1]).setFontColor('#3C4043').setWrap(true);
   });
 
   // 分頁連結
-  const linkRow = 10 + howto.length + 1;
+  const linkRow = top + 1 + howto.length + 1;
   sh.getRange(linkRow, 2, 1, 6).merge().setValue('前往分頁').setFontSize(13).setFontWeight('bold');
-  const tabs = ['盤點表', '查詢', '需補充清單', '品項', '盤點紀錄', '異動紀錄', '實驗套組', '設定'];
+  const tabs = ['盤點表', '查詢', '需補充清單', '請購清單', '實驗排程', '借用紀錄', '品項', '盤點紀錄', '異動紀錄', '實驗套組',
+    '玻片需求', '設定'];
   tabs.forEach(function (n, i) {
     const t = ss.getSheetByName(n);
     if (!t) return;
     const cell = sh.getRange(linkRow + 1 + Math.floor(i / 6), 2 + (i % 6));
     cell.setFormula('=HYPERLINK("#gid=' + t.getSheetId() + '","→ ' + n + '")').setFontColor('#1A73E8');
   });
-  sh.getRange(linkRow + 4, 2, 1, 6).merge()
+  sh.getRange(linkRow + 3 + Math.ceil(tabs.length / 6) - 2, 2, 1, 6).merge()
     .setValue('這一頁是自動產生的，數字會自己更新。要重建：🔧 維護 → 首頁、美化與資料保護（一次設定）。')
     .setFontSize(9).setFontColor('#9AA0A6');
   sh.setFrozenRows(0);

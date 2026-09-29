@@ -18,6 +18,21 @@ const MENU = [
   ['📦 品項', [
     ['新增品項', 'addItemDialog'],
     ['登記異動（新購／領用／報廢／移位）', 'movementDialog'],
+    null,
+    ['借出登記', 'loanDialog'],
+    ['歸還登記', 'returnDialog'],
+  ]],
+  ['🛒 請購', [
+    ['新增請購需求', 'purchaseDialog'],
+    ['從需補充清單加入', 'addRestockToPurchase'],
+    ['到貨入庫', 'receiveDialog'],
+    null,
+    ['列印請購清單', 'printPurchaseList'],
+  ]],
+  ['🧪 實驗準備', [
+    ['新增實驗排程', 'experimentDialog'],
+    ['列印實驗準備單', 'printPrepDialog'],
+    ['實驗套組庫存檢核', 'printKitCheck'],
   ]],
   ['🖨 列印', [
     ['藥品清單', 'printDrugList'],
@@ -27,6 +42,11 @@ const MENU = [
     ['藥品櫃標示', 'printCabinetLabels'],
     ['需補充清單', 'printRestockList'],
   ]],
+  ['📊 統計報表', [
+    ['各學期耗用量', 'printUsage'],
+    ['危險物品統計', 'printHazard'],
+    ['永久玻片需求對照', 'printSlides'],
+  ]],
   ['🔧 維護', [
     ['立即備份', 'backupNow'],
     ['首頁、美化與資料保護（一次設定）', 'setupEnhancements'],
@@ -35,6 +55,7 @@ const MENU = [
     ['補上缺少的編號', 'fillMissingIds'],
     ['更新需補充清單', 'refreshRestock'],
     ['套用安全存量建議', 'applySafetyStock'],
+    ['套用危險分類建議', 'applyHazardSuggestions'],
     ['套用工作表格式與下拉選單', 'setupSheets'],
   ]],
 ];
