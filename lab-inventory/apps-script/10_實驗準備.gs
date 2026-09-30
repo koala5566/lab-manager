@@ -70,6 +70,7 @@ function stockIndex_() {
     const o = { code: String(r[ic['編號']]).trim(), name: String(r[ic['品名']]).trim(), unit: String(r[ic['單位']]),
       qty: r[ic['最新數量']], note: String(r[ic['最新數量說明']]), status: String(r[ic['狀態']]),
       loc: [r[ic['教室']], r[ic['櫃別']]].filter(function (x) { return String(x).trim(); }).join(' ') };
+    if (typeof measureOf_ === 'function') Object.assign(o, measureOf_(r, ic));   // 計量方式、每包約、安全存量
     if (o.code) byCode[o.code] = o;
     if (o.name && o.status !== '已淘汰' && !byName[o.name]) byName[o.name] = o;
   });
@@ -157,12 +158,20 @@ function experimentCheck_(kitName, groups, stock) {
       const have = s && isNumber_(s.qty) && String(s.qty).trim() !== '' ? Number(s.qty) : '';
       // 每組寫「8片」、庫存單位是「盒」這種單位不同的，不能直接比，改成提醒自行確認
       const perUnit = String(it.perText).replace(/^[\d.\s]+/, '').trim();
-      const mismatch = !!(perUnit && s && s.unit && perUnit !== s.unit);
+      let short, warn = '', state = '';
+      if (typeof stockJudge_ === 'function') {
+        // 單位相同比數量；有「每包約」換算；大包裝看有沒有、快沒了；單位不同提醒自行確認
+        const j = s ? stockJudge_(s, need, perUnit) : { state: '', text: '' };
+        state = j.state; short = j.state === 'bad'; if (j.state === 'warn') warn = j.text;
+      } else {
+        const mismatch = !!(perUnit && s && s.unit && perUnit !== s.unit);
+        short = !mismatch && need !== '' && have !== '' && have < need;
+        if (mismatch) warn = '單位不同（每組以「' + perUnit + '」計、庫存以「' + s.unit + '」計），請自行確認';
+      }
       return { name: it.name, per: it.perText || numText_(it.per), need: need, have: have === '' ? (s ? (s.note || '—') : '未建檔') : have,
-        haveText: s ? (s.note || numText_(s.qty)) : '未建檔', unit: s ? s.unit : '', loc: it.place || (s ? s.loc : ''),
-        note: [it.note, mismatch ? '單位不同（每組以「' + perUnit + '」計、庫存以「' + s.unit + '」計），請自行確認' : '']
-          .filter(String).join('；'),
-        short: !mismatch && need !== '' && have !== '' && have < need };
+        haveText: s ? (s.note || numText_(s.qty)) : '未建檔', unit: s && !s.note ? s.unit : '', loc: it.place || (s ? s.loc : ''),
+        note: [it.note, warn].filter(String).join('；'), state: s ? state : 'warn', bulk: !!(s && s.measure === '大包裝'),
+        short: short };
     }),
   };
 }

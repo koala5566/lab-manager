@@ -45,6 +45,8 @@ function addItemDialog() {
       <div><label>櫃別</label><input id="櫃別" list="cabs"></div>
       <div><label>排序位置</label><input id="排序位置" placeholder="例：3-2"></div>
       <div><label>安全存量</label><input id="安全存量" inputmode="decimal"></div>
+      <div><label>計量方式</label><select id="計量方式"><option>一般</option><option>大包裝</option></select></div>
+      <div><label>每包約（大包裝知道才填）</label><input id="每包約" placeholder="例：100 支"></div>
       <div class="full"><label>分處存放（放好幾處時才填，用頓號分隔）</label><input id="分處存放" placeholder="例：化學準備室、生物準備室冰箱"></div>
       <div><label>SDS</label><select id="SDS"><option></option><option>有</option><option>無</option></select></div>
       <div><label>危險物品</label><select id="危險物品"><option></option><option>是</option><option>否</option></select></div>
@@ -73,7 +75,7 @@ function addItemDialog() {
       function go() {
         const f = {};
         ['類別','科別','清單分區','品名','化學式或規格','單位','教室','櫃別','排序位置','安全存量','分處存放','SDS','危險物品',
-         '備註','自己筆記','數量','日期'].forEach(function (k) { f[k] = document.getElementById(k).value.trim(); });
+         '備註','自己筆記','數量','日期','計量方式','每包約'].forEach(function (k) { f[k] = document.getElementById(k).value.trim(); });
         if (!f['品名']) { alert('請填品名。'); return; }
         if (f['安全存量'] && isNaN(Number(f['安全存量']))) { alert('安全存量請填數字。'); return; }
         const b = document.getElementById('go'); b.disabled = true; b.textContent = '新增中…';
@@ -89,6 +91,7 @@ function addItem(f) {
   if (!f['品名'] || !f['類別'] || !f['清單分區']) throw new Error('類別、清單分區、品名都要填。');
   const prefix = PREFIX[f['類別']];
   if (!prefix) throw new Error('類別只能是藥品、器材或耗材。');
+  if (typeof ensureMeasureCols_ === 'function' && (f['計量方式'] === '大包裝' || f['每包約'])) ensureMeasureCols_();
   const lock = LockService.getDocumentLock();
   lock.waitLock(20000);
   try {
@@ -100,6 +103,8 @@ function addItem(f) {
     const put = function (name, v) { if (name in items.col) row[items.col[name]] = v; };
     ['類別', '科別', '清單分區', '品名', '化學式或規格', '單位', '教室', '櫃別', '排序位置', '分處存放', 'SDS', '危險物品',
       '備註', '自己筆記'].forEach(function (k) { put(k, f[k] || ''); });
+    if (f['計量方式'] === '大包裝') put('計量方式', '大包裝');
+    if (f['每包約']) put('每包約', f['每包約']);
     put('編號', code);
     put('狀態', '使用中');
     if (f['安全存量'] !== '') put('安全存量', Number(f['安全存量']));

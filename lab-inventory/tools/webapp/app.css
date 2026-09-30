@@ -195,3 +195,5 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 
 .buyb{display:inline-block;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-weak);border-radius:6px;padding:1px 7px;margin-left:6px}.buyb.ok{color:var(--ok);background:var(--ok-weak)}
 .buyck{display:inline-flex;gap:5px;align-items:center;color:var(--warn);font-weight:600;font-size:12.5px;padding:4px 0}.buyck input{width:16px;height:16px}
+
+.jd{font-weight:600}.jd.bad{color:var(--bad)}.jd.warn{color:var(--warn)}.jd.ok{color:var(--ok)}

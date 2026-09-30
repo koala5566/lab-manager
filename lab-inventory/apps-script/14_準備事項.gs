@@ -69,7 +69,9 @@ function todoData() {
       what: String(r[c['事項']]).trim(), qty: String(r[c['數量']]).trim(), unit: String(r[c['單位']]).trim(), code: code,
       status: st, note: String(r[c['備註']]).trim(),
       place: s ? [s.room, s.cab, s.pos].filter(String).join(' ') : '',
-      have: s ? (s.note || s.qty) : '', short: !!(s && need && isNumber_(s.qty) && Number(s.qty) < need),
+      have: s ? (s.note || s.qty) : '', sunit: s && !s.note ? s.unit : '', bulk: !!(s && s.measure === '大包裝'),
+      judge: typeof stockJudge_ === 'function' && s ? stockJudge_(s, r[c['數量']], String(r[c['單位']]).trim()) : null,
+      short: !!(s && need && isNumber_(s.qty) && Number(s.qty) < need),
       buy: buy[id] || '',
     });
   });
@@ -79,7 +81,7 @@ function todoData() {
   });
   return {
     list: list, today: today, rooms: cfg.rooms,
-    items: items.map(function (x) { return [x.code, x.name, x.spec, x.unit, x.note || x.qty, [x.room, x.cab].filter(String).join(' ')]; }),
+    items: items.map(function (x) { return [x.code, x.name, x.spec, x.unit, x.note || x.qty, [x.room, x.cab].filter(String).join(' '), x.measure === '大包裝' ? 1 : 0]; }),
   };
 }
 
@@ -261,8 +263,9 @@ function todoJs_() {
             '<input type="checkbox" data-id="' + esc(x.id) + '"' + (x.status !== '待準備' ? ' checked' : '') + '>' +
             '<div><div class="td-w">' + esc(x.what) + (x.qty ? ' × ' + esc(x.qty) + ' ' + esc(x.unit) : '') + '</div>' +
             (where ? '<div class="td-s">' + esc(where) + '</div>' : '') +
-            (x.place || x.have ? '<div class="td-s">📍 ' + esc(x.place || '—') + (x.have !== '' ? '　庫存 ' + esc(x.have) + ' ' + esc(x.unit) : '') +
-              (x.short ? '　<span class="td-short">⚠ 可能不夠</span>' : '') + '</div>' : '') +
+            (x.place || x.have ? '<div class="td-s">📍 ' + esc(x.place || '—') + (x.have !== '' ? '　庫存 ' + esc(x.have) + (x.sunit ? ' ' + esc(x.sunit) : '') : '') + '</div>' : '') +
+            (x.judge && x.judge.text ? '<div class="td-s" style="color:' + (x.judge.state === 'bad' ? '#d93025' : x.judge.state === 'warn' ? '#b06000' : '#188038') + '">' +
+              (x.judge.state === 'bad' ? '✘ ' : x.judge.state === 'warn' ? '⚠ ' : '✔ ') + esc(x.judge.text) + '</div>' : '') +
             (x.note ? '<div class="td-s">📝 ' + esc(x.note) + '</div>' : '') +
             (x.buy ? '<div class="td-s"><span class="td-buy">🛒 請購：' + esc(x.buy) + '</span></div>' : '') + '</div>' +
             '<div class="td-a">' + (x.status === '待準備' && !x.buy ? '<button data-r="請購" data-id="' + esc(x.id) + '" title="加入請購清單">🛒 要先買</button>' : '') +

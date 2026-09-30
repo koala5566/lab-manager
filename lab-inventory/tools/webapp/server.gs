@@ -86,7 +86,8 @@ function appLessonKit(name, groups) {
   const ck = experimentCheck_(name, Number(groups) || 0);
   if (!ck) return null;
   return { groups: ck.groups, rows: ck.rows.map(function (x) {
-    return { name: x.name, per: x.per, need: x.need, have: x.haveText, unit: x.unit, loc: x.loc, short: x.short, note: x.note };
+    return { name: x.name, per: x.per, need: x.need, have: x.haveText, unit: x.unit, loc: x.loc, short: x.short, note: x.note,
+      state: x.state || (x.short ? 'bad' : 'ok'), bulk: !!x.bulk };
   }) };
 }
 

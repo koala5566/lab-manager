@@ -27,7 +27,7 @@ function setupEnhancements() {
     try { fn(); done.push('✔ ' + name); } catch (e) { done.push('✘ ' + name + '：' + e.message); }
   };
   step('請購清單、借用紀錄、實驗排程、準備事項工作表、實驗室使用設定', function () {
-    ['ensureLabSettings_', 'setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_', 'setupTodoSheet_'].forEach(function (fn) {
+    ['ensureLabSettings_', 'ensureMeasureCols_', 'setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_', 'setupTodoSheet_'].forEach(function (fn) {
       if (typeof globalThis[fn] === 'function') globalThis[fn]();
     });
   });

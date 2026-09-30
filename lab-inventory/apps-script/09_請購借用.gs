@@ -65,7 +65,8 @@ function pickerItems_() {
   const items = getTable_('品項');
   const ic = items.col;
   return items.rows.filter(function (r) { return String(r[ic['編號']]).trim(); }).map(function (r) {
-    return {
+    const m = typeof measureOf_ === 'function' ? measureOf_(r, ic) : { measure: '一般', per: 0, perUnit: '', safe: '' };
+    return { measure: m.measure, per: m.per, perUnit: m.perUnit, safe: m.safe,
       code: String(r[ic['編號']]).trim(), name: String(r[ic['品名']]), spec: String(r[ic['化學式或規格']]),
       room: String(r[ic['教室']]), cab: String(r[ic['櫃別']]), pos: String(r[ic['排序位置']]), unit: String(r[ic['單位']]),
       qty: String(r[ic['最新數量']]), note: String(r[ic['最新數量說明']]), status: String(r[ic['狀態']]),

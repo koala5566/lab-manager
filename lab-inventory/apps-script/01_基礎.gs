@@ -67,6 +67,8 @@ const MENU = [
     ['更新需補充清單', 'refreshRestock'],
     ['套用安全存量建議', 'applySafetyStock'],
     ['套用危險分類建議', 'applyHazardSuggestions'],
+    ['產生大包裝建議清單', 'makeBulkSuggestions'],
+    ['套用大包裝建議', 'applyBulkSuggestions'],
     ['套用工作表格式與下拉選單', 'setupSheets'],
   ]],
 ];

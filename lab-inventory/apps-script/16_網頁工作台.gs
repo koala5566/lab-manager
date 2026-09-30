@@ -86,7 +86,8 @@ function appLessonKit(name, groups) {
   const ck = experimentCheck_(name, Number(groups) || 0);
   if (!ck) return null;
   return { groups: ck.groups, rows: ck.rows.map(function (x) {
-    return { name: x.name, per: x.per, need: x.need, have: x.haveText, unit: x.unit, loc: x.loc, short: x.short, note: x.note };
+    return { name: x.name, per: x.per, need: x.need, have: x.haveText, unit: x.unit, loc: x.loc, short: x.short, note: x.note,
+      state: x.state || (x.short ? 'bad' : 'ok'), bulk: !!x.bulk };
   }) };
 }
 
@@ -295,6 +296,8 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 
 .buyb{display:inline-block;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-weak);border-radius:6px;padding:1px 7px;margin-left:6px}.buyb.ok{color:var(--ok);background:var(--ok-weak)}
 .buyck{display:inline-flex;gap:5px;align-items:center;color:var(--warn);font-weight:600;font-size:12.5px;padding:4px 0}.buyck input{width:16px;height:16px}
+
+.jd{font-weight:600}.jd.bad{color:var(--bad)}.jd.warn{color:var(--warn)}.jd.ok{color:var(--ok)}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
@@ -605,8 +608,9 @@ function todoRow(t, opt) {
     .filter(String).join('　');
   return '<div class="it' + (t.status !== '待準備' ? ' done' : '') + '"><button class="ck' + (t.status !== '待準備' ? ' on' : '') + '" data-ck="' + esc(t.id) + '">' +
     (t.status !== '待準備' ? ic('check', 's') : '') + '</button><div style="min-width:0;flex:1"><div class="t">' + esc(t.what) + (t.qty ? ' × ' + esc(t.qty) + ' ' + esc(t.unit) : '') + '</div>' +
-    '<div class="s">' + where + (t.place || t.have !== '' ? '<br>' + ic('pin', 's') + ' ' + esc(t.place || '—') + (t.have !== '' && t.have != null ? '　庫存 ' + esc(t.have) + ' ' + esc(t.unit) : '') : '') +
-    (t.short ? '　<span class="late">⚠ 可能不夠</span>' : '') + (t.note ? '<br>📝 ' + esc(t.note) : '') +
+    '<div class="s">' + where + (t.place || t.have !== '' ? '<br>' + ic('pin', 's') + ' ' + esc(t.place || '—') + (t.have !== '' && t.have != null ? '　庫存 ' + esc(t.have) + (t.sunit ? ' ' + esc(t.sunit) : '') : '') : '') +
+    (t.judge && t.judge.text ? '<br><span class="jd ' + t.judge.state + '">' + (t.judge.state === 'bad' ? '✘ ' : t.judge.state === 'warn' ? '⚠ ' : '✔ ') + esc(t.judge.text) + '</span>' : '') +
+    (t.note ? '<br>📝 ' + esc(t.note) : '') +
     (t.buy ? '<br><span class="buyb' + (t.buy === '已到貨' ? ' ok' : '') + '">🛒 請購：' + esc(t.buy) + '</span>' : '') + '</div></div>' +
     (opt.actions === false ? '' : t.status === '待準備' ? '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">' +
       (t.buy ? '' : '<button class="x" data-buy="' + esc(t.id) + '">🛒 要先買</button>') + '<button class="x" data-cancel="' + esc(t.id) + '">取消</button></div>' :
@@ -812,9 +816,9 @@ function fillLesson(el, b) {
     var el2 = $('#lKit', box); if (!el2) return;
     if (!k) { el2.innerHTML = '<span class="muted">「實驗套組」裡沒有「' + esc(b.content) + '」，建好之後這裡會自動檢查器材。</span>'; return; }
     el2.innerHTML = k.rows.map(function (r) {
-      var known = r.have !== '' && !isNaN(r.have);
-      var st = r.short ? '<span class="ng">有 ' + esc(r.have) + ' ' + esc(r.unit) + ' ✘</span>' : known ? '<span class="ok">有 ' + esc(r.have) + ' ' + esc(r.unit) + ' ✔</span>' :
-        '<span class="muted" style="white-space:nowrap">' + esc(r.have || '—') + '（請自行確認）</span>';
+      var hv = esc(r.have) + (r.unit ? ' ' + esc(r.unit) : '');
+      var st = r.state === 'bad' ? '<span class="ng">' + hv + ' ✘</span>' : r.state === 'warn' ? '<span class="soon" style="white-space:nowrap">' + hv + ' ⚠</span>' :
+        '<span class="ok">' + hv + (r.bulk ? '（大包裝）' : '') + ' ✔</span>';
       return '<div class="kit"><span>' + esc(r.name) + (r.need !== '' ? ' × ' + esc(r.need) : '') + (r.note ? '<br><small class="muted">' + esc(r.note) + '</small>' : '') + '</span>' + st + '</div>';
     }).join('') || '<span class="muted">套組沒有器材</span>';
   }).catch(function () { });
@@ -1036,7 +1040,7 @@ function openAdd(pre) {
     var hit = (S.D.items || []).filter(function (x) { return (x[1] + ' ' + x[2] + ' ' + x[0]).toLowerCase().indexOf(k) >= 0; }).slice(0, 8);
     if (!hit.length) return;
     var s = document.createElement('div'); s.className = 'sug';
-    s.innerHTML = hit.map(function (x, i) { return '<button data-h="' + i + '">' + esc(x[1]) + ' <small>' + esc(x[2]) + '　' + esc(x[5]) + '・庫存 ' + esc(x[4] || '—') + ' ' + esc(x[3]) + '</small></button>'; }).join('');
+    s.innerHTML = hit.map(function (x, i) { return '<button data-h="' + i + '">' + esc(x[1]) + ' <small>' + esc(x[2]) + '　' + esc(x[5]) + '・庫存 ' + esc(x[4] || '—') + ' ' + esc(x[3]) + (x[6] ? '（大包裝）' : '') + '</small></button>'; }).join('');
     $$('button', s).forEach(function (b) {
       b.onmousedown = function (e) {
         e.preventDefault(); keep();

@@ -342,7 +342,8 @@ function homeJs_() {
           h += '<div class="td' + (late ? ' late' : '') + '"><input type="checkbox" data-id="' + esc(x.id) + '"><div><div class="t" style="font-weight:600">' + esc(x.what) +
             (x.qty ? ' × ' + esc(x.qty) + ' ' + esc(x.unit) : '') + '</div><div class="s" style="font-size:13px;color:#5f6368">' +
             esc([x.date ? x.roc.slice(4) + '（' + x.wd + '）' + (late ? ' 已過期' : '') : '', short(x.lab), x.period ? (x.period === '午' ? '中午' : '第' + x.period + '節') : '', x.cls].filter(String).join('　')) +
-            (x.place ? '<br>📍 ' + esc(x.place) : '') + (x.short ? '　<b style="color:#d93025">⚠ 可能不夠</b>' : '') + '</div></div></div>';
+            (x.place ? '<br>📍 ' + esc(x.place) : '') + (x.judge && x.judge.state !== 'ok' && x.judge.text ? '<br><b style="color:' + (x.judge.state === 'bad' ? '#d93025' : '#b06000') + '">' +
+              (x.judge.state === 'bad' ? '✘ ' : '⚠ ') + esc(x.judge.text) + '</b>' : '') + '</div></div></div>';
         });
         if (H.restock !== null) h += '<div class="rs"><span>需補充（低於安全存量）</span><span><b>' + H.restock + '</b> 項 ' +
           (window.tab ? '<a href="#" class="go">看清單</a>' : '') + '</span></div>';
