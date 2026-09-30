@@ -3,7 +3,7 @@
  *
  * 開網頁（部署的網址）就是這個畫面；舊版手機網頁在網址後面加 ?page=old。
  *   ・今天：現在第幾節、哪幾間在上課、今天和下一個上課日的課、待準備、需補充（電腦、平板是儀表板）
- *   ・課表：六間實驗室單日／整週／月曆／清單；點一堂課看詳細（器材夠不夠、準備事項、補實驗名稱、準備單）
+ *   ・課表：各實驗室單日／整週／月曆／清單；點一堂課看詳細（器材夠不夠、準備事項、補實驗名稱、準備單）
  *   ・待辦：準備事項打勾、新增（可對到某堂課、品項搜尋）
  *   ・盤點：一次一項、大按鈕 −／＋、存好自動跳下一項
  *   ・更多：需補充、品項查詢、外觀（淺色／深色）
@@ -217,7 +217,7 @@ html.dark .now{background:linear-gradient(135deg,#23408C,#2F5FC4)}
 .dash{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
 @media (max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr)}.dash{grid-template-columns:1fr}}
 .ch{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}.ch h3{margin:0;font-size:16px}.ch .more{margin-left:auto;color:var(--pri);font-size:13px;font-weight:600}
-.labs6{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px 16px 14px}
+.labs6{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;padding:8px 16px 14px}
 .lt{border-radius:12px;padding:11px 12px;border:1px solid var(--line);text-align:left;min-height:84px}
 .lt .n{font-size:12.5px;color:var(--sub);display:flex;justify-content:space-between;gap:6px}.lt b{display:block;font-size:15px;margin-top:5px}.lt span{font-size:12.5px;color:var(--sub)}
 .lt.busy{border-color:transparent}.lt.free b{color:var(--mute);font-weight:600}
@@ -414,7 +414,7 @@ function monday(k) { var d = parseKey(k); d.setDate(d.getDate() - (d.getDay() + 
 function wdOf(k) { return '日一二三四五六'.charAt(parseKey(k).getDay()); }
 function roc(k) { return (+k.slice(0, 4) - 1911) + '.' + k.slice(5, 7) + '.' + k.slice(8, 10); }
 function md(k) { return (+k.slice(5, 7)) + '/' + (+k.slice(8, 10)); }
-function short(lab) { return String(lab || '').replace(/學?實驗室/, ''); }
+function short(lab) { return String(lab || '').replace(/學?實驗室/, '').replace(/能?教室/, ''); }
 function perLabel(t) { t = String(t || '').trim(); return !t ? '' : t === '午' ? '中午' : '第' + t + '節'; }
 function colorOf(type) { return (S.D.colors || {})[type] || '#E8EAED'; }
 function evAttr(type) { return 'class="ev-c" style="--c:' + esc(colorOf(type)) + '"'; }
@@ -707,7 +707,7 @@ function vDash(m) {
     '<button class="card kpi" data-go2="restock"><small>' + ic('alert', 's') + '需補充</small><b style="color:' + (D.kpi.restock ? 'var(--bad)' : 'var(--ok)') + '">' + (D.kpi.restock === null ? '—' : D.kpi.restock) + '</b><span>低於安全存量</span></button>' +
     '<div class="card kpi"><small>' + ic('cart', 's') + '請購中</small><b>' + D.kpi.purchase.n + '</b><span>待處理＋已請購</span></div>' +
     '<div class="card kpi"><small>' + ic('swap', 's') + '借出中</small><b>' + D.kpi.loans.n + '</b><span>' + (D.kpi.loans.late ? '<span class="late">逾期 ' + D.kpi.loans.late + ' 筆</span>' : '沒有逾期') + '</span></div></div>' +
-    '<div class="dash"><div class="card"><div class="ch"><h3>六間實驗室・現在</h3>' + (p ? '<span class="st b">' + esc(p.name) + '</span>' : '<span class="st f">下課時間</span>') + '<button class="more" data-go2="week">看課表 ›</button></div>' +
+    '<div class="dash"><div class="card"><div class="ch"><h3>各實驗室・現在</h3>' + (p ? '<span class="st b">' + esc(p.name) + '</span>' : '<span class="st f">下課時間</span>') + '<button class="more" data-go2="week">看課表 ›</button></div>' +
     '<div class="labs6">' + D.rooms.map(function (r) {
       var b = idx >= 0 ? D.today.list.filter(function (x) { return x.lab === r && x.pis.indexOf(idx) >= 0; })[0] : null;
       if (b) return '<button class="lt busy ev-c" style="--c:' + esc(colorOf(b.type)) + '" data-b="' + esc(JSON.stringify([D.today.key, S._bi.push(b) - 1])) + '"><div class="n">' + esc(r) + '<span class="st b">上課中</span></div><b>' + esc(b.content || b.type) + '</b><span>' + esc([b.cls, b.teacher ? b.teacher + '老師' : ''].filter(String).join('　')) + '</span></button>';

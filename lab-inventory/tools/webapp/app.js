@@ -29,7 +29,7 @@ function monday(k) { var d = parseKey(k); d.setDate(d.getDate() - (d.getDay() + 
 function wdOf(k) { return '日一二三四五六'.charAt(parseKey(k).getDay()); }
 function roc(k) { return (+k.slice(0, 4) - 1911) + '.' + k.slice(5, 7) + '.' + k.slice(8, 10); }
 function md(k) { return (+k.slice(5, 7)) + '/' + (+k.slice(8, 10)); }
-function short(lab) { return String(lab || '').replace(/學?實驗室/, ''); }
+function short(lab) { return String(lab || '').replace(/學?實驗室/, '').replace(/能?教室/, ''); }
 function perLabel(t) { t = String(t || '').trim(); return !t ? '' : t === '午' ? '中午' : '第' + t + '節'; }
 function colorOf(type) { return (S.D.colors || {})[type] || '#E8EAED'; }
 function evAttr(type) { return 'class="ev-c" style="--c:' + esc(colorOf(type)) + '"'; }
@@ -322,7 +322,7 @@ function vDash(m) {
     '<button class="card kpi" data-go2="restock"><small>' + ic('alert', 's') + '需補充</small><b style="color:' + (D.kpi.restock ? 'var(--bad)' : 'var(--ok)') + '">' + (D.kpi.restock === null ? '—' : D.kpi.restock) + '</b><span>低於安全存量</span></button>' +
     '<div class="card kpi"><small>' + ic('cart', 's') + '請購中</small><b>' + D.kpi.purchase.n + '</b><span>待處理＋已請購</span></div>' +
     '<div class="card kpi"><small>' + ic('swap', 's') + '借出中</small><b>' + D.kpi.loans.n + '</b><span>' + (D.kpi.loans.late ? '<span class="late">逾期 ' + D.kpi.loans.late + ' 筆</span>' : '沒有逾期') + '</span></div></div>' +
-    '<div class="dash"><div class="card"><div class="ch"><h3>六間實驗室・現在</h3>' + (p ? '<span class="st b">' + esc(p.name) + '</span>' : '<span class="st f">下課時間</span>') + '<button class="more" data-go2="week">看課表 ›</button></div>' +
+    '<div class="dash"><div class="card"><div class="ch"><h3>各實驗室・現在</h3>' + (p ? '<span class="st b">' + esc(p.name) + '</span>' : '<span class="st f">下課時間</span>') + '<button class="more" data-go2="week">看課表 ›</button></div>' +
     '<div class="labs6">' + D.rooms.map(function (r) {
       var b = idx >= 0 ? D.today.list.filter(function (x) { return x.lab === r && x.pis.indexOf(idx) >= 0; })[0] : null;
       if (b) return '<button class="lt busy ev-c" style="--c:' + esc(colorOf(b.type)) + '" data-b="' + esc(JSON.stringify([D.today.key, S._bi.push(b) - 1])) + '"><div class="n">' + esc(r) + '<span class="st b">上課中</span></div><b>' + esc(b.content || b.type) + '</b><span>' + esc([b.cls, b.teacher ? b.teacher + '老師' : ''].filter(String).join('　')) + '</span></button>';

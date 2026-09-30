@@ -351,7 +351,7 @@ function setupDashboard_() {
     const WD = function (d) { return '"（"&CHOOSE(WEEKDAY(' + d + ',2),"一","二","三","四","五","六","日")&"）"'; };
     const dayList = function (day) {
       return '=ARRAYFORMULA(IFERROR(ARRAY_CONSTRAIN(QUERY(SORT(FILTER({IFERROR(MATCH(LEFT(' + P + '&"",1),{"1","2","3","4","午","5","6","7"},0),9),' +
-        'IF(' + P + '&""="午","中午",' + P + '&""),REGEXREPLACE(' + L + '&"","學?實驗室",""),' +
+        'IF(' + P + '&""="午","中午",' + P + '&""),REGEXREPLACE(REGEXREPLACE(' + L + '&"","學?實驗室",""),"能?教室",""),' +
         'IF(' + N + '="",' + TY + '&"",' + N + '&"")&IF(' + C + '="",""," "&' + C + ')&IF(' + TC + '="",""," "&' + TC + ')},' +
         D + '=' + day + ',' + S + '<>"取消"),1,TRUE),"select Col2,Col3,Col4",0),14,3),"（沒有登記）"))';
     };
@@ -364,7 +364,7 @@ function setupDashboard_() {
       sh.getRange(r0 + 2, c0).setFormula(dayList(x[1]));
       sh.getRange(r0 + 2, c0, 14, 3).setFontSize(10).setVerticalAlignment('top');
       sh.getRange(r0 + 16, c0, 1, 3).merge().setFormula('=IF(COUNTIFS(' + D + ',' + x[1] + ',' + S + ',"<>取消")>14,"…還有 "&(COUNTIFS(' + D + ',' + x[1] + ',' +
-        S + ',"<>取消")-14)&" 筆，請看「🗓 實驗室使用 → 六間實驗室使用一覽」","")').setFontSize(9).setFontColor('#80868B');
+        S + ',"<>取消")-14)&" 筆，請看「🗓 實驗室使用 → 實驗室使用一覽」","")').setFontSize(9).setFontColor('#80868B');
       sh.getRange(r0 + 1, c0, 16, 3).setBorder(true, true, true, true, null, null, '#DADCE0', SpreadsheetApp.BorderStyle.SOLID);
     });
     top = r0 + 18;
@@ -375,7 +375,7 @@ function setupDashboard_() {
       sh.getRange(top, 2, 1, 6).merge().setValue('📝 待準備事項（過期＋到下一個上課日）').setFontSize(13).setFontWeight('bold').setFontColor('#1A73E8');
       sh.getRange(top + 1, 2, 1, 5).setValues([['日期', '要準備的東西', '實驗室・節次・班級', '老師', '備註']]).setFontWeight('bold').setBackground('#F1F3F4').setFontSize(10);
       sh.getRange(top + 2, 2).setFormula('=ARRAYFORMULA(IFERROR(ARRAY_CONSTRAIN(QUERY(SORT(FILTER({' + d + ',IF(' + d + '<TODAY(),"⚠ ","")&TEXT(' + d + ',"m/d"),' +
-        w + '&IF(' + q + '="",""," × "&' + q + '&" "&' + u + '),TRIM(REGEXREPLACE(' + lab + '&"","學?實驗室","")&" "&' + pp + '&" "&' + cl + '),' + tc + '&"",' + nt + '&""},' +
+        w + '&IF(' + q + '="",""," × "&' + q + '&" "&' + u + '),TRIM(REGEXREPLACE(REGEXREPLACE(' + lab + '&"","學?實驗室",""),"能?教室","")&" "&' + pp + '&" "&' + cl + '),' + tc + '&"",' + nt + '&""},' +
         st + '="待準備",' + d + '<>"",' + d + '<=WORKDAY(TODAY(),1)),1,TRUE),"select Col2,Col3,Col4,Col5,Col6",0),8,5),"（沒有 👍）"))');
       sh.getRange(top + 2, 2, 8, 5).setFontSize(10).setVerticalAlignment('top');
       sh.getRange(top + 10, 2, 1, 5).merge().setFormula('=IF(COUNTIFS(' + st + ',"待準備",' + d + ',"<="&WORKDAY(TODAY(),1),' + d + ',"<>")>8,"…還有更多，請看「🗓 實驗室使用 → 📝 準備事項待辦清單」","")')
@@ -391,7 +391,7 @@ function setupDashboard_() {
     ['盤點', '📋 盤點 → 產生盤點表 → 電腦填黃色欄位，或手機開盤點網頁 → 📋 盤點 → 完成盤點'],
     ['申報', '🖨 列印 → 申報清單（期初／期末）→ 選那次盤點 → 🖨 列印；簽稿文字在預覽上方'],
     ['請購', '🛒 請購 → 新增請購需求／從需補充清單加入 → 狀態改「已請購」→ 到貨時 🛒 請購 → 到貨入庫（自動加庫存）'],
-    ['實驗室使用', '🗓 實驗室使用 → 登記使用（點課表格子）→ 列印門口海報／本週課表；六間使用一覽看今天誰在用'],
+    ['實驗室使用', '🗓 實驗室使用 → 登記使用（點課表格子）→ 列印門口海報／本週課表；使用一覽看今天誰在用'],
     ['實驗準備', '🗓 實驗室使用 → 列印實驗準備單（需要總數對照庫存，附準備／歸還打勾欄）'],
     ['準備事項', '老師口頭、便條交代的：🗓 實驗室使用 → 新增準備事項；待辦清單打勾＝已準備（手機「待辦」分頁也可以）'],
     ['新增／異動', '📦 品項 → 新增品項；新購、領用、報廢、移位用 📦 品項 → 登記異動（不要刪列）'],

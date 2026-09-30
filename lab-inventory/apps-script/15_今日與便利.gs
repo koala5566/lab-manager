@@ -314,7 +314,7 @@ function homeJs_() {
       '.hm .rf{float:right;font-size:13px;font-weight:normal}';
     document.head.appendChild(css);
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-    function short(lab) { return String(lab).replace(/學?實驗室/, ''); }
+    function short(lab) { return String(lab).replace(/學?實驗室/, '').replace(/能?教室/, ''); }
     window.homeInit = function (id) {
       const box = document.getElementById(id);
       let H = null;

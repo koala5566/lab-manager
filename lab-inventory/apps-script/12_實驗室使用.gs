@@ -1,10 +1,10 @@
 /**
- * 實驗室藥品器材耗材管理系統 — 實驗室使用登記、門口海報、本週課表、六間使用一覽（第四批）
+ * 實驗室藥品器材耗材管理系統 — 實驗室使用登記、門口海報、本週課表、使用一覽（第四批）
  *
  * 🗓 實驗室使用
  *   ・登記使用（一週課表）：選實驗室、週次、用途類型（實驗課、社團、自主學習…），在課表格子上點選時段、填班級，一次存檔
  *       可每週重複到某日；同一間、同一天、同一節已有人登記會提醒（撞堂）
- *   ・六間實驗室使用一覽：今天／整週；現在這一節會標亮；手機網頁也有「使用」分頁
+ *   ・實驗室使用一覽：今天／整週；現在這一節會標亮；手機網頁也有「使用」分頁
  *   ・列印門口海報（A4 橫式）：實驗名稱、年級、實驗室、本週日期、授課教師、班級、安全注意事項、講義 QR code
  *   ・列印本週課表（A4 直式）：該實驗室這週每一節誰在用
  * 資料存在「實驗排程」工作表（一列＝某間實驗室、某天、某幾節的一次使用）。
@@ -13,7 +13,8 @@
  */
 
 const LAB_DEFAULTS = {
-  rooms: ['化學實驗室一', '化學實驗室二', '化學實驗室三', '生物實驗室一', '生物實驗室二', '生物實驗室三'],
+  rooms: ['化學實驗室一', '化學實驗室二', '化學實驗室三', '生物實驗室一', '生物實驗室二', '生物實驗室三',
+    '多功能教室三', '多功能教室四', '多功能教室五', '階梯教室'],
   periods: [['第1節', '08:10', '09:00'], ['第2節', '09:10', '10:00'], ['第3節', '10:10', '11:00'], ['第4節', '11:10', '12:00'],
     ['中午', '12:00', '13:10'], ['第5節', '13:10', '14:00'], ['第6節', '14:10', '15:00'], ['第7節', '15:20', '16:10']],
   types: [['實驗課', '#D2E3FC'], ['補做實驗', '#C6DAFC'], ['社團', '#CEEAD6'], ['自主學習', '#FEEFC3'], ['專題研究', '#FAD2CF'],
@@ -388,17 +389,17 @@ function saveBooking(p) {
   return { msg: msg };
 }
 
-// ---------------------------------------------------------------- 六間實驗室使用一覽
+// ---------------------------------------------------------------- 實驗室使用一覽
 
 function usageBoard() {
   const html = DIALOG_STYLE + '<div id="board"></div><script>' + usageBoardJs_() + extraJs_(['todoJs_', 'lessonJs_']) +
     'boardInit("board", { print: true });</script>';
-  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(1100).setHeight(780), '🗓 六間實驗室使用一覽');
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(1100).setHeight(780), '🗓 實驗室使用一覽');
 }
 
 /**
  * 使用一覽的畫面程式（電腦對話框、手機網頁共用）。呼叫 boardInit(容器id, {print}) 開始。
- * 檢視：單日（六間 × 各節）、整週、月曆、清單（任選期間）；可跳到任一天、只看某一間、用關鍵字找（例：二敬、仲文、多元選修）。
+ * 檢視：單日（各實驗室 × 各節）、整週、月曆、清單（任選期間）；可跳到任一天、只看某一間、用關鍵字找（例：二敬、仲文、多元選修）。
  */
 /** 其他檔案的畫面程式（有安裝才加進來） */
 function extraJs_(names) {
@@ -429,7 +430,7 @@ function usageBoardJs_() {
     function monday(k) { const d = parse(k); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return key(d); }
     function roc(k) { return (+k.slice(0, 4) - 1911) + '.' + k.slice(5, 7) + '.' + k.slice(8, 10); }
     function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-    function short(lab) { return String(lab).replace(/學?實驗室/, ''); }
+    function short(lab) { return String(lab).replace(/學?實驗室/, '').replace(/能?教室/, ''); }
     function per(t) { return t === '午' ? '午' : t; }
     window.boardInit = function (id, opt) {
       const box = document.getElementById(id);
@@ -620,7 +621,7 @@ function labPrintDialog_(page, title, hint) {
   const cfg = labConfig_();
   const html = DIALOG_STYLE + `
     <p class="hint">${hint}</p>
-    <label>實驗室</label><select id="lab"><option value="">全部六間</option></select>
+    <label>實驗室</label><select id="lab"><option value="">全部</option></select>
     <label>週次（選該週任一天）</label><input type="date" id="week">
     <div class="btns"><button onclick="google.script.host.close()">取消</button>
       <button class="primary" onclick="openPrint({ page: '${page}', lab: document.getElementById('lab').value, week: document.getElementById('week').value }, this)">開啟列印頁</button></div>
@@ -697,7 +698,7 @@ function page_poster(p) {
       cfg.safety.map(function (x) { return '<li>' + esc_(x) + '</li>'; }).join('') + '</ol></div>' +
       (kit.link ? '<div class="p-qr"><div id="qr' + i + '"></div><small>掃描看實驗講義</small></div>' : '') + '</div></section>';
   });
-  const body = pages.join('') || '<p style="padding:20px">這一週（' + rocText_(mon) + ' 起）' + (p.lab ? p.lab : '六間實驗室') +
+  const body = pages.join('') || '<p style="padding:20px">這一週（' + rocText_(mon) + ' 起）' + (p.lab ? p.lab : '各實驗室') +
     '沒有登記「實驗課」或「補做實驗」。</p>';
   const qrJs = qrs.length ? '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script>' +
     JSON.stringify(qrs).replace(/</g, '\\u003c') + '.forEach(function (q) { const el = document.getElementById(q.id);' +

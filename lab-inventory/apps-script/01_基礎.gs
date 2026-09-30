@@ -31,7 +31,7 @@ const MENU = [
   ]],
   ['🗓 實驗室使用', [
     ['登記使用（一週課表）', 'bookDialog'],
-    ['六間實驗室使用一覽', 'usageBoard'],
+    ['實驗室使用一覽', 'usageBoard'],
     ['✏️ 補實驗名稱（一次填好幾堂）', 'nameDialog'],
     ['匯入實驗室課表（老師的 Excel）', 'importScheduleDialog'],
     null,
