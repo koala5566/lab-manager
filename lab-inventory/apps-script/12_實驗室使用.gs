@@ -17,7 +17,10 @@ const LAB_DEFAULTS = {
   periods: [['第1節', '08:10', '09:00'], ['第2節', '09:10', '10:00'], ['第3節', '10:10', '11:00'], ['第4節', '11:10', '12:00'],
     ['中午', '12:00', '13:10'], ['第5節', '13:10', '14:00'], ['第6節', '14:10', '15:00'], ['第7節', '15:20', '16:10']],
   types: [['實驗課', '#D2E3FC'], ['補做實驗', '#C6DAFC'], ['社團', '#CEEAD6'], ['自主學習', '#FEEFC3'], ['專題研究', '#FAD2CF'],
-    ['老師借用', '#E9D2FD'], ['借用教室', '#EDE7F6'], ['考試', '#FFE0B2'], ['研習', '#D7F3F5'], ['其他', '#E8EAED']],
+    ['多元選修', '#FDE2F3'], ['老師借用', '#E9D2FD'], ['借用教室', '#EDE7F6'], ['考試', '#FFE0B2'], ['研習', '#D7F3F5'],
+    ['放假', '#DADCE0'], ['其他', '#E8EAED']],
+  // 班名 → 班號：仁＝01、義＝02…廉＝21（二敬 → 213）
+  classNames: ['仁', '義', '禮', '智', '忠', '孝', '博', '愛', '和', '平', '誠', '信', '敬', '業', '樂', '群', '簡', '捷', '敏', '慧', '廉'],
   safety: '進入實驗室請穿實驗衣、戴護目鏡，長髮請綁好｜實驗室內禁止飲食｜依老師指示操作，不可擅自取用藥品或器材｜' +
     '廢液、廢棄物依規定分類回收，不可倒入水槽｜發生意外或受傷，立即報告老師',
 };
@@ -42,6 +45,7 @@ function ensureLabSettings_() {
   addTable(['上課教室'], LAB_DEFAULTS.rooms.map(function (r) { return [r]; }));
   addTable(['節次', '開始', '結束'], LAB_DEFAULTS.periods);
   addTable(['用途類型', '顏色'], LAB_DEFAULTS.types, 1);
+  addTable(['班名'], LAB_DEFAULTS.classNames.map(function (r) { return [r]; }));
   if (!('安全注意事項' in s.params)) {
     const colA = sh.getRange(1, 1, sh.getMaxRows(), 1).getValues();
     let last = 0;
@@ -79,6 +83,7 @@ function labConfig_() {
   });
   return {
     rooms: s.lists['上課教室'] || LAB_DEFAULTS.rooms, periods: periods, types: types, colors: colors,
+    classNames: s.lists['班名'] || LAB_DEFAULTS.classNames,
     safety: String(s.params['安全注意事項'] || '').split(/[｜|\n]/).map(function (x) { return x.trim(); }).filter(String),
     school: String(s.params['學校名稱'] || ''),
   };
@@ -512,7 +517,7 @@ function page_poster(p) {
     return '<section class="poster"><div class="p-top"><span>' + esc_(cfg.school) + '</span><span>' +
       esc_(rocText_(dates[0]) + (dates.length > 1 ? '～' + rocText_(dates[dates.length - 1]).slice(4) : '')) + '</span></div>' +
       (grade ? '<div class="p-grade">' + esc_(grade) + '</div>' : '') +
-      '<div class="p-title">' + esc_(name) + '</div><div class="p-room">📍 ' + esc_(lab) + '</div>' +
+      '<div class="p-title">' + esc_(name || '（實驗名稱未填）') + '</div><div class="p-room">📍 ' + esc_(lab) + '</div>' +
       '<div class="p-meta">' + (teachers.length ? '授課教師：' + esc_(teachers.join('、')) : '') +
       (classes.length ? '　｜　班級：' + esc_(classes.join('、')) : '') + '</div>' +
       '<div class="p-sched">' + bs.slice().sort(function (a, b) {

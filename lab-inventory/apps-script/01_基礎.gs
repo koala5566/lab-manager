@@ -32,6 +32,7 @@ const MENU = [
   ['🗓 實驗室使用', [
     ['登記使用（一週課表）', 'bookDialog'],
     ['六間實驗室使用一覽', 'usageBoard'],
+    ['匯入實驗室課表（老師的 Excel）', 'importScheduleDialog'],
     null,
     ['列印門口海報（A4 橫式）', 'printPosterDialog'],
     ['列印本週課表（A4 直式）', 'printLabWeekDialog'],
