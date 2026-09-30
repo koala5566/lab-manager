@@ -17,6 +17,13 @@ function doGet(e) {
   if (p.page && /^\w+$/.test(p.page) && typeof globalThis['page_' + p.page] === 'function') {
     return globalThis['page_' + p.page](p);
   }
+  // 有安裝「16_網頁工作台」時，開網頁就是新版；舊版在網址後面加 ?page=old
+  if (typeof globalThis.page_app === 'function') return globalThis.page_app(p);
+  return oldMobilePage_(p);
+}
+
+/** 舊版手機網頁（盤點、需補充、查詢、使用、待辦、今天分頁）。 */
+function oldMobilePage_() {
   // 有安裝「12_實驗室使用」時，手機多一個「使用」分頁（六間實驗室使用一覽）
   // 有安裝「14_準備事項」時，多一個「待辦」分頁
   // 有安裝「15_今日與便利」時，多一個「今天」分頁（開網頁先看到它），點課可以補名稱、加準備事項
