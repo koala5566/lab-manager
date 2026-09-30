@@ -115,20 +115,16 @@ function guessLab_(name, rooms) {
 
 // ---------------------------------------------------------------- 讀老師的課表
 
-/** 班名簡稱「二敬」→「213」；認不出來回傳 '' */
-function classNo_(grade, name, names) {
-  const g = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 }[grade];
-  const i = names.indexOf(name);
-  return g && i >= 0 ? String(g) + pad2_(i + 1) : '';
-}
 
 /** 格子文字 → { type, content, cls, teacher }，班名認不出來時 warn 有內容 */
 function classifyCell_(text, cfg) {
   const t = String(text).replace(/\s+/g, '');
   const m = t.match(/^([一二三123])([^\-－—–~～]{1,3})[\-－—–~～](.+)$/);
   if (m) {
-    const no = classNo_(m[1], m[2], cfg.classNames);
-    return { type: '實驗課', content: '', cls: no || m[1] + m[2], teacher: m[3], warn: no ? '' : '班名「' + m[1] + m[2] + '」對不到班號' };
+    // 班級照學校習慣存「二敬」
+    const g = { '1': '一', '2': '二', '3': '三' }[m[1]] || m[1];
+    const ok = cfg.classNames.indexOf(m[2]) >= 0;
+    return { type: '實驗課', content: '', cls: g + m[2], teacher: m[3], warn: ok ? '' : '班名「' + m[2] + '」不在設定的班名裡，請確認' };
   }
   if (/多元選修/.test(t)) return { type: '多元選修', content: t };
   if (/研究方法|專題/.test(t)) return { type: '專題研究', content: t };
@@ -282,7 +278,7 @@ function importPreview(o) {
     weeks: order.map(function (k) {
       const w = weeks[k];
       w.dates.sort();
-      const classes = w.classes.slice().sort(naturalCompare_);
+      const classes = w.classes.slice().sort(classCompare_(p.cfg.classNames));
       return { key: k, lab: w.lab, week: w.week,
         range: rocText_(w.dates[0]).slice(4) + (w.dates[w.dates.length - 1] !== w.dates[0] ? '～' + rocText_(w.dates[w.dates.length - 1]).slice(4) : ''),
         classes: classes.length > 8 ? classes.slice(0, 8).join('、') + '…共 ' + classes.length + ' 班' : classes.join('、'),

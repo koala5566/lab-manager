@@ -19,7 +19,7 @@ const LAB_DEFAULTS = {
   types: [['實驗課', '#D2E3FC'], ['補做實驗', '#C6DAFC'], ['社團', '#CEEAD6'], ['自主學習', '#FEEFC3'], ['專題研究', '#FAD2CF'],
     ['多元選修', '#FDE2F3'], ['老師借用', '#E9D2FD'], ['借用教室', '#EDE7F6'], ['考試', '#FFE0B2'], ['研習', '#D7F3F5'],
     ['放假', '#DADCE0'], ['其他', '#E8EAED']],
-  // 班名 → 班號：仁＝01、義＝02…廉＝21（二敬 → 213）
+  // 班名（照班序：仁＝01、義＝02…廉＝21）；課表顯示「二敬」，打「213」也會顯示成「二敬」
   classNames: ['仁', '義', '禮', '智', '忠', '孝', '博', '愛', '和', '平', '誠', '信', '敬', '業', '樂', '群', '簡', '捷', '敏', '慧', '廉'],
   safety: '進入實驗室請穿實驗衣、戴護目鏡，長髮請綁好｜實驗室內禁止飲食｜依老師指示操作，不可擅自取用藥品或器材｜' +
     '廢液、廢棄物依規定分類回收，不可倒入水槽｜發生意外或受傷，立即報告老師',
@@ -186,7 +186,7 @@ function bookings_(fromKey, toKey, cfg) {
     out.push({
       row: i + 2, date: k, lab: String(r[c['教室']]).trim(), pis: parsePeriods_(r[c['節次']], cfg.periods),
       periodText: String(r[c['節次']]), type: String(r[c['用途類型']] || '').trim() || '實驗課',
-      content: String(r[c['實驗名稱']]).trim(), cls: String(r[c['班級']]).trim(), teacher: String(r[c['教師']]).trim(),
+      content: String(r[c['實驗名稱']]).trim(), cls: classLabel_(r[c['班級']], cfg.classNames), teacher: String(r[c['教師']]).trim(),
       groups: r[c['組數']], status: st, note: String(r[c['備註']]).trim(),
     });
   });
@@ -488,8 +488,30 @@ function labPrintDialog_(page, title, hint) {
 function gradeOf_(kitGrade, classes) {
   if (kitGrade) return kitGrade;
   const g = {};
-  classes.forEach(function (c) { const m = String(c).match(/^([123])\d{2}/); if (m) g['高' + '一二三'.charAt(Number(m[1]) - 1)] = true; });
+  classes.forEach(function (c) {
+    const m = String(c).match(/^(?:高)?([一二三123])/);
+    if (m) g['高' + ({ '1': '一', '2': '二', '3': '三' }[m[1]] || m[1])] = true;
+  });
   return Object.keys(g).join('、');
+}
+
+/** 班級顯示用學校習慣的班名：「213」→「二敬」；已經是「二敬」或認不出來的照原樣。 */
+function classLabel_(cls, names) {
+  const s = String(cls || '').trim();
+  const m = s.match(/^([123])(\d{2})$/);
+  if (!m) return s;
+  const n = names[Number(m[2]) - 1];
+  return n ? '一二三'.charAt(Number(m[1]) - 1) + n : s;
+}
+
+/** 班級排序：依年級、班序（仁、義、禮…），認不出來的排後面。 */
+function classCompare_(names) {
+  const key = function (c) {
+    const m = String(c).match(/^(?:高)?([一二三])(.+)$/);
+    if (m && names.indexOf(m[2]) >= 0) return ('一二三'.indexOf(m[1]) + 1) * 100 + names.indexOf(m[2]) + 1;
+    return /^\d+$/.test(c) ? Number(c) : 99999;
+  };
+  return function (a, b) { return key(a) - key(b) || naturalCompare_(a, b); };
 }
 
 function page_poster(p) {
@@ -510,11 +532,11 @@ function page_poster(p) {
   const pages = order.map(function (g, i) {
     const bs = groups[g], lab = bs[0].lab, name = bs[0].content, kit = kits[name] || {};
     const dates = uniq(bs.map(function (b) { return b.date; }).sort());
-    const classes = uniq(bs.map(function (b) { return b.cls; })).sort(naturalCompare_);
+    const classes = uniq(bs.map(function (b) { return b.cls; })).sort(classCompare_(cfg.classNames));
     const teachers = uniq(bs.map(function (b) { return b.teacher; }));
     const grade = gradeOf_(kit.grade, classes);
     if (kit.link) qrs.push({ id: 'qr' + i, text: kit.link });
-    return '<section class="poster"><div class="p-top"><span>' + esc_(cfg.school) + '</span><span>' +
+    return '<section class="poster' + (bs.length > 8 ? ' many' : '') + '"><div class="p-top"><span>' + esc_(cfg.school) + '</span><span>' +
       esc_(rocText_(dates[0]) + (dates.length > 1 ? '～' + rocText_(dates[dates.length - 1]).slice(4) : '')) + '</span></div>' +
       (grade ? '<div class="p-grade">' + esc_(grade) + '</div>' : '') +
       '<div class="p-title">' + esc_(name || '（實驗名稱未填）') + '</div><div class="p-room">📍 ' + esc_(lab) + '</div>' +
@@ -550,6 +572,9 @@ const POSTER_CSS = `
   .p-meta { font-size: 15pt; margin-top: 4mm; color: #3c4043; }
   .p-sched { margin-top: 4mm; display: flex; flex-wrap: wrap; gap: 2mm; }
   .p-sched span { border: 1pt solid #1a73e8; color: #174ea6; border-radius: 3mm; padding: 1mm 3mm; font-size: 13pt; }
+  .many .p-title { font-size: 46pt; } .many .p-room { font-size: 24pt; margin-top: 2mm; } .many .p-grade { margin-top: 3mm; }
+  .many .p-sched { gap: 1.2mm; margin-top: 3mm; } .many .p-sched span { font-size: 10.5pt; padding: 0.4mm 2mm; }
+  .many .p-safety { font-size: 10.5pt; padding: 2mm 4mm; }
   .p-bottom { margin-top: auto; display: flex; gap: 8mm; align-items: flex-end; }
   .p-safety { flex: 1; background: #fef7e0; border-left: 5pt solid #f9ab00; padding: 3mm 5mm; font-size: 12pt; }
   .p-safety ol { margin: 2mm 0 0; padding-left: 6mm; } .p-safety li { margin: 0.6mm 0; }
