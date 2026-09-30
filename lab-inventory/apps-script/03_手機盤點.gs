@@ -18,7 +18,9 @@ function doGet(e) {
     return globalThis['page_' + p.page](p);
   }
   // 有安裝「12_實驗室使用」時，手機多一個「使用」分頁（六間實驗室使用一覽）
-  const usage = typeof globalThis.usageBoardJs_ === 'function' ? globalThis.usageBoardJs_() : '';
+  // 有安裝「14_準備事項」時，多一個「待辦」分頁
+  const usage = (typeof globalThis.usageBoardJs_ === 'function' ? globalThis.usageBoardJs_() : '') +
+    (typeof globalThis.todoJs_ === 'function' ? globalThis.todoJs_() : '');
   return HtmlService.createHtmlOutput(MOBILE_HTML.replace('/*USAGE_JS*/', function () { return usage; }))
     .setTitle('實驗室盤點')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -191,7 +193,7 @@ const MOBILE_HTML = `<!DOCTYPE html>
 </style></head>
 <body>
 <header>
-  <div class="tabs"><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tNeed" onclick="tab('need')">需補充</button><button id="tFind" onclick="tab('find')">查詢</button><button id="tUse" onclick="tab('use')" style="display:none">使用</button></div>
+  <div class="tabs"><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tNeed" onclick="tab('need')">需補充</button><button id="tFind" onclick="tab('find')">查詢</button><button id="tUse" onclick="tab('use')" style="display:none">使用</button><button id="tTodo" onclick="tab('todo')" style="display:none">待辦</button></div>
   <div id="hCount">
     <div class="title" id="title">載入中…</div>
     <div class="filters"><select id="room" onchange="onRoom()"></select><select id="cab" onchange="render()"></select></div>
@@ -217,9 +219,11 @@ const MOBILE_HTML = `<!DOCTYPE html>
 <main id="mNeed" style="display:none"></main>
 <main id="mFind" style="display:none"></main>
 <main id="mUse" style="display:none"></main>
+<main id="mTodo" style="display:none"></main>
 <script>/*USAGE_JS*/</script>
 <script>
 if (window.boardInit) document.getElementById('tUse').style.display = '';
+if (window.todoInit) document.getElementById('tTodo').style.display = '';
 var D = null;
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 function uniq(a) { var s = {}, o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }
@@ -231,13 +235,16 @@ function tab(t) {
   document.getElementById('tNeed').className = t === 'need' ? 'on' : '';
   document.getElementById('tFind').className = t === 'find' ? 'on' : '';
   document.getElementById('tUse').className = t === 'use' ? 'on' : '';
+  document.getElementById('tTodo').className = t === 'todo' ? 'on' : '';
   show('hCount', t === 'count'); show('mCount', t === 'count');
   show('mNeed', t === 'need');
   show('hFind', t === 'find'); show('mFind', t === 'find');
   if (t === 'find' && !document.getElementById('fCat').options.length) find();
   show('mUse', t === 'use');
   if (t === 'need') need();
+  show('mTodo', t === 'todo');
   if (t === 'use' && !document.getElementById('mUse').innerHTML) boardInit('mUse', {});
+  if (t === 'todo' && !document.getElementById('mTodo').innerHTML) todoInit('mTodo', {});
 }
 
 function need() {

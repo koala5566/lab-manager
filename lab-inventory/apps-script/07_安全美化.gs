@@ -26,8 +26,8 @@ function setupEnhancements() {
   const step = function (name, fn) {
     try { fn(); done.push('✔ ' + name); } catch (e) { done.push('✘ ' + name + '：' + e.message); }
   };
-  step('請購清單、借用紀錄、實驗排程工作表、實驗室使用設定', function () {
-    ['ensureLabSettings_', 'setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_'].forEach(function (fn) {
+  step('請購清單、借用紀錄、實驗排程、準備事項工作表、實驗室使用設定', function () {
+    ['ensureLabSettings_', 'setupPurchaseSheet_', 'setupLoanSheet_', 'setupExperimentSheet_', 'setupTodoSheet_'].forEach(function (fn) {
       if (typeof globalThis[fn] === 'function') globalThis[fn]();
     });
   });
@@ -200,7 +200,7 @@ function arrangeTabs_() {
   const ss = SpreadsheetApp.getActive();
   const order = [
     ['首頁', '#1A73E8'],
-    ['盤點表', '#FBBC04'], ['實驗排程', '#FBBC04'], ['查詢', '#FBBC04'], ['需補充清單', '#34A853'],
+    ['盤點表', '#FBBC04'], ['實驗排程', '#FBBC04'], ['準備事項', '#FBBC04'], ['查詢', '#FBBC04'], ['需補充清單', '#34A853'],
     ['請購清單', '#FF6D01'], ['借用紀錄', '#FF6D01'],
     ['品項', '#4285F4'], ['盤點紀錄', '#4285F4'], ['異動紀錄', '#4285F4'],
     ['實驗套組', '#A142F4'], ['玻片需求', '#A142F4'],
@@ -332,6 +332,10 @@ function setupDashboard_() {
   const ed = col('實驗排程', '日期'), es = col('實驗排程', '狀態');
   if (ed && es) cards2.push(['7 天內實驗室使用', '=COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"<>取消",' + es + ',"<>已歸還")',
     '="其中待準備 "&COUNTIFS(' + ed + ',">="&TODAY(),' + ed + ',"<="&(TODAY()+7),' + es + ',"待準備")&" 個"', '#E37400']);
+  const ts = col('準備事項', '狀態'), tdd = col('準備事項', '需要日期');
+  if (ts && tdd) cards2.push(['待準備事項', '=COUNTIF(' + ts + ',"待準備")',
+    '=IF(COUNTIFS(' + ts + ',"待準備",' + tdd + ',"<"&TODAY(),' + tdd + ',"<>")>0,"⚠ 過期 "&COUNTIFS(' + ts + ',"待準備",' + tdd +
+    ',"<"&TODAY(),' + tdd + ',"<>")&" 項","今明兩天 "&COUNTIFS(' + ts + ',"待準備",' + tdd + ',">="&TODAY(),' + tdd + ',"<="&(TODAY()+1))&" 項")', '#1A73E8']);
   const ls = col('借用紀錄', '狀態'), ld = col('借用紀錄', '預計歸還');
   if (ls && ld) cards2.push(['借出中', '=COUNTIF(' + ls + ',"借出中")',
     '=IF(COUNTIFS(' + ls + ',"借出中",' + ld + ',"<"&TODAY(),' + ld + ',"<>")>0,"⚠ 逾期 "&COUNTIFS(' + ls + ',"借出中",' + ld +
@@ -347,6 +351,7 @@ function setupDashboard_() {
     ['請購', '🛒 請購 → 新增請購需求／從需補充清單加入 → 狀態改「已請購」→ 到貨時 🛒 請購 → 到貨入庫（自動加庫存）'],
     ['實驗室使用', '🗓 實驗室使用 → 登記使用（點課表格子）→ 列印門口海報／本週課表；六間使用一覽看今天誰在用'],
     ['實驗準備', '🗓 實驗室使用 → 列印實驗準備單（需要總數對照庫存，附準備／歸還打勾欄）'],
+    ['準備事項', '老師口頭、便條交代的：🗓 實驗室使用 → 新增準備事項；待辦清單打勾＝已準備（手機「待辦」分頁也可以）'],
     ['新增／異動', '📦 品項 → 新增品項；新購、領用、報廢、移位用 📦 品項 → 登記異動（不要刪列）'],
     ['借用', '📦 品項 → 借出登記／歸還登記；逾期會在首頁與「借用紀錄」標紅'],
     ['備份', '每週五 17:00 自動備份；完成盤點後也會備份；要馬上備份：🔧 維護 → 立即備份'],
@@ -359,7 +364,7 @@ function setupDashboard_() {
   // 分頁連結
   const linkRow = top + 1 + howto.length + 1;
   sh.getRange(linkRow, 2, 1, 6).merge().setValue('前往分頁').setFontSize(13).setFontWeight('bold');
-  const tabs = ['盤點表', '查詢', '需補充清單', '請購清單', '實驗排程', '借用紀錄', '品項', '盤點紀錄', '異動紀錄', '實驗套組',
+  const tabs = ['盤點表', '查詢', '需補充清單', '請購清單', '實驗排程', '準備事項', '借用紀錄', '品項', '盤點紀錄', '異動紀錄', '實驗套組',
     '玻片需求', '設定'];
   tabs.forEach(function (n, i) {
     const t = ss.getSheetByName(n);
