@@ -343,6 +343,48 @@ function setupDashboard_() {
   let top = 9;
   if (cards2.length) { drawCards(9, cards2); top = 13; }
 
+  // 今天／下一個上課日的課、待準備事項（公式，每天自己更新）
+  const E = function (n) { return col('實驗排程', n); };
+  if (E('日期') && E('節次') && E('教室') && E('狀態') && E('實驗名稱')) {
+    const D = E('日期'), P = E('節次'), L = E('教室'), S = E('狀態'), N = E('實驗名稱'), C = E('班級'), TC = E('教師');
+    const TY = E('用途類型') || N;
+    const WD = function (d) { return '"（"&CHOOSE(WEEKDAY(' + d + ',2),"一","二","三","四","五","六","日")&"）"'; };
+    const dayList = function (day) {
+      return '=ARRAYFORMULA(IFERROR(ARRAY_CONSTRAIN(QUERY(SORT(FILTER({IFERROR(MATCH(LEFT(' + P + '&"",1),{"1","2","3","4","午","5","6","7"},0),9),' +
+        'IF(' + P + '&""="午","中午",' + P + '&""),REGEXREPLACE(' + L + '&"","學?實驗室",""),' +
+        'IF(' + N + '="",' + TY + '&"",' + N + '&"")&IF(' + C + '="",""," "&' + C + ')&IF(' + TC + '="",""," "&' + TC + ')},' +
+        D + '=' + day + ',' + S + '<>"取消"),1,TRUE),"select Col2,Col3,Col4",0),14,3),"（沒有登記）"))';
+    };
+    const r0 = top;
+    [['B', 'TODAY()', '📅 今天 '], ['E', 'WORKDAY(TODAY(),1)', '📅 下一個上課日 ']].forEach(function (x) {
+      const c0 = x[0] === 'B' ? 2 : 5;
+      sh.getRange(r0, c0, 1, 3).merge().setFormula('="' + x[2] + '"&TEXT(' + x[1] + ',"m/d")&' + WD(x[1]))
+        .setFontSize(13).setFontWeight('bold').setFontColor('#1A73E8');
+      sh.getRange(r0 + 1, c0, 1, 3).setValues([['節次', '實驗室', '內容・班級・老師']]).setFontWeight('bold').setBackground('#F1F3F4').setFontSize(10);
+      sh.getRange(r0 + 2, c0).setFormula(dayList(x[1]));
+      sh.getRange(r0 + 2, c0, 14, 3).setFontSize(10).setVerticalAlignment('top');
+      sh.getRange(r0 + 16, c0, 1, 3).merge().setFormula('=IF(COUNTIFS(' + D + ',' + x[1] + ',' + S + ',"<>取消")>14,"…還有 "&(COUNTIFS(' + D + ',' + x[1] + ',' +
+        S + ',"<>取消")-14)&" 筆，請看「🗓 實驗室使用 → 六間實驗室使用一覽」","")').setFontSize(9).setFontColor('#80868B');
+      sh.getRange(r0 + 1, c0, 16, 3).setBorder(true, true, true, true, null, null, '#DADCE0', SpreadsheetApp.BorderStyle.SOLID);
+    });
+    top = r0 + 18;
+    const TD = function (n) { return col('準備事項', n); };
+    if (TD('需要日期') && TD('狀態') && TD('事項')) {
+      const d = TD('需要日期'), st = TD('狀態'), w = TD('事項'), q = TD('數量'), u = TD('單位'), lab = TD('實驗室'), pp = TD('節次'),
+        cl = TD('班級'), tc = TD('教師'), nt = TD('備註');
+      sh.getRange(top, 2, 1, 6).merge().setValue('📝 待準備事項（過期＋到下一個上課日）').setFontSize(13).setFontWeight('bold').setFontColor('#1A73E8');
+      sh.getRange(top + 1, 2, 1, 5).setValues([['日期', '要準備的東西', '實驗室・節次・班級', '老師', '備註']]).setFontWeight('bold').setBackground('#F1F3F4').setFontSize(10);
+      sh.getRange(top + 2, 2).setFormula('=ARRAYFORMULA(IFERROR(ARRAY_CONSTRAIN(QUERY(SORT(FILTER({' + d + ',IF(' + d + '<TODAY(),"⚠ ","")&TEXT(' + d + ',"m/d"),' +
+        w + '&IF(' + q + '="",""," × "&' + q + '&" "&' + u + '),TRIM(REGEXREPLACE(' + lab + '&"","學?實驗室","")&" "&' + pp + '&" "&' + cl + '),' + tc + '&"",' + nt + '&""},' +
+        st + '="待準備",' + d + '<>"",' + d + '<=WORKDAY(TODAY(),1)),1,TRUE),"select Col2,Col3,Col4,Col5,Col6",0),8,5),"（沒有 👍）"))');
+      sh.getRange(top + 2, 2, 8, 5).setFontSize(10).setVerticalAlignment('top');
+      sh.getRange(top + 10, 2, 1, 5).merge().setFormula('=IF(COUNTIFS(' + st + ',"待準備",' + d + ',"<="&WORKDAY(TODAY(),1),' + d + ',"<>")>8,"…還有更多，請看「🗓 實驗室使用 → 📝 準備事項待辦清單」","")')
+        .setFontSize(9).setFontColor('#80868B');
+      sh.getRange(top + 1, 2, 10, 5).setBorder(true, true, true, true, null, null, '#DADCE0', SpreadsheetApp.BorderStyle.SOLID);
+      top += 12;
+    }
+  }
+
   // 常用操作
   sh.getRange(top, 2, 1, 6).merge().setValue('常用操作（上方選單「🧪 實驗室管理」）').setFontSize(13).setFontWeight('bold');
   const howto = [

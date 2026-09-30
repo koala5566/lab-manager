@@ -19,8 +19,10 @@ function doGet(e) {
   }
   // 有安裝「12_實驗室使用」時，手機多一個「使用」分頁（六間實驗室使用一覽）
   // 有安裝「14_準備事項」時，多一個「待辦」分頁
-  const usage = (typeof globalThis.usageBoardJs_ === 'function' ? globalThis.usageBoardJs_() : '') +
-    (typeof globalThis.todoJs_ === 'function' ? globalThis.todoJs_() : '');
+  // 有安裝「15_今日與便利」時，多一個「今天」分頁（開網頁先看到它），點課可以補名稱、加準備事項
+  const usage = ['usageBoardJs_', 'todoJs_', 'lessonJs_', 'homeJs_'].map(function (n) {
+    return typeof globalThis[n] === 'function' ? globalThis[n]() : '';
+  }).join('');
   return HtmlService.createHtmlOutput(MOBILE_HTML.replace('/*USAGE_JS*/', function () { return usage; }))
     .setTitle('實驗室盤點')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -188,12 +190,13 @@ const MOBILE_HTML = `<!DOCTYPE html>
   .card.need { border-left-color: #d93025; }
   .needn { color: #d93025; font-weight: 600; }
   .tabs button { font-size: 15px; }
+  .tabs { gap: 4px; } .tabs button { padding: 9px 2px; font-size: 14.5px; white-space: nowrap; }
   label.chk { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-top: 8px; }
   label.chk input { width: auto; }
 </style></head>
 <body>
 <header>
-  <div class="tabs"><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tNeed" onclick="tab('need')">需補充</button><button id="tFind" onclick="tab('find')">查詢</button><button id="tUse" onclick="tab('use')" style="display:none">使用</button><button id="tTodo" onclick="tab('todo')" style="display:none">待辦</button></div>
+  <div class="tabs"><button id="tHome" onclick="tab('home')" style="display:none">今天</button><button id="tCount" class="on" onclick="tab('count')">盤點</button><button id="tNeed" onclick="tab('need')">需補充</button><button id="tFind" onclick="tab('find')">查詢</button><button id="tUse" onclick="tab('use')" style="display:none">使用</button><button id="tTodo" onclick="tab('todo')" style="display:none">待辦</button></div>
   <div id="hCount">
     <div class="title" id="title">載入中…</div>
     <div class="filters"><select id="room" onchange="onRoom()"></select><select id="cab" onchange="render()"></select></div>
@@ -215,6 +218,7 @@ const MOBILE_HTML = `<!DOCTYPE html>
     <div class="row"><button style="flex:1;background:#1a73e8;color:#fff;border:none" onclick="find()">查詢</button></div>
   </div>
 </header>
+<main id="mHome" style="display:none"></main>
 <main id="mCount"></main>
 <main id="mNeed" style="display:none"></main>
 <main id="mFind" style="display:none"></main>
@@ -224,6 +228,7 @@ const MOBILE_HTML = `<!DOCTYPE html>
 <script>
 if (window.boardInit) document.getElementById('tUse').style.display = '';
 if (window.todoInit) document.getElementById('tTodo').style.display = '';
+if (window.homeInit) document.getElementById('tHome').style.display = '';
 var D = null;
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 function uniq(a) { var s = {}, o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }
@@ -232,6 +237,9 @@ function fail(e) { document.getElementById('mCount').innerHTML = ''; document.ge
 function tab(t) {
   var show = function (id, on) { document.getElementById(id).style.display = on ? '' : 'none'; };
   document.getElementById('tCount').className = t === 'count' ? 'on' : '';
+  document.getElementById('tHome').className = t === 'home' ? 'on' : '';
+  show('mHome', t === 'home');
+  if (t === 'home') homeInit('mHome');
   document.getElementById('tNeed').className = t === 'need' ? 'on' : '';
   document.getElementById('tFind').className = t === 'find' ? 'on' : '';
   document.getElementById('tUse').className = t === 'use' ? 'on' : '';
@@ -427,5 +435,6 @@ function find() {
 }
 
 load();
+if (window.homeInit) tab('home');
 </script>
 </body></html>`;

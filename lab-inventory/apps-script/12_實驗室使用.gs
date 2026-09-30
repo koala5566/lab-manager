@@ -207,7 +207,9 @@ function usageData(fromKey, days) {
   const now = new Date();
   return {
     rooms: cfg.rooms, periods: cfg.periods, colors: cfg.colors, days: list,
-    bookings: bookings_(fromKey, toKey, cfg).map(function (b) { delete b.row; return b; }),
+    bookings: bookings_(fromKey, toKey, cfg),
+    // 有安裝「14_準備事項」時，附上這段期間待準備的事項（格子上顯示 📝）
+    todos: typeof globalThis.todoPending_ === 'function' ? globalThis.todoPending_(fromKey, toKey) : [],
     today: today_(), nowHm: Utilities.formatDate(now, SCHOOL_TZ, 'HH:mm'),
   };
 }
@@ -389,7 +391,8 @@ function saveBooking(p) {
 // ---------------------------------------------------------------- 六間實驗室使用一覽
 
 function usageBoard() {
-  const html = DIALOG_STYLE + '<div id="board"></div><script>' + usageBoardJs_() + 'boardInit("board", { print: true });</script>';
+  const html = DIALOG_STYLE + '<div id="board"></div><script>' + usageBoardJs_() + extraJs_(['todoJs_', 'lessonJs_']) +
+    'boardInit("board", { print: true });</script>';
   SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(1100).setHeight(780), '🗓 六間實驗室使用一覽');
 }
 
@@ -397,6 +400,11 @@ function usageBoard() {
  * 使用一覽的畫面程式（電腦對話框、手機網頁共用）。呼叫 boardInit(容器id, {print}) 開始。
  * 檢視：單日（六間 × 各節）、整週、月曆、清單（任選期間）；可跳到任一天、只看某一間、用關鍵字找（例：二敬、仲文、多元選修）。
  */
+/** 其他檔案的畫面程式（有安裝才加進來） */
+function extraJs_(names) {
+  return names.map(function (n) { return typeof globalThis[n] === 'function' ? globalThis[n]() : ''; }).join('');
+}
+
 function usageBoardJs_() {
   return `
   (function () {
@@ -412,7 +420,7 @@ function usageBoardJs_() {
       'table.um td{border:1px solid #dadce0;vertical-align:top;padding:2px 3px;height:74px;font-size:11px;text-align:left}table.um td.out{background:#f8f9fa;color:#bbb}table.um td.today{box-shadow:inset 0 0 0 2px #1a73e8}' +
       'table.um .dn{font-weight:bold;font-size:12px;cursor:pointer;color:#1a73e8}table.um .e{border-radius:3px;padding:1px 3px;margin:1px 0;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
       'table.ul{border-collapse:collapse;width:100%;background:#fff}table.ul th,table.ul td{border:1px solid #dadce0;padding:4px 6px;font-size:13px;text-align:left}table.ul th{background:#f1f3f4}' +
-      '.ub-cnt{color:#5f6368;font-size:13px;margin:4px 0}.ub-legend span{display:inline-block;padding:2px 8px;border-radius:10px;margin:2px;font-size:12px}' +
+      '.ub-td{font-size:11px;background:#fff;border-radius:8px;padding:0 4px;margin-left:2px}.ub-cnt{color:#5f6368;font-size:13px;margin:4px 0}.ub-legend span{display:inline-block;padding:2px 8px;border-radius:10px;margin:2px;font-size:12px}' +
       '@media print{.ub-bar{display:none}.ub-wrap{overflow:visible}}';
     document.head.appendChild(css);
     function key(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -467,9 +475,16 @@ function usageBoardJs_() {
         if (!st.kw) return true;
         return [b.content, b.type, b.cls, b.teacher, b.lab, b.note].join(' ').toLowerCase().indexOf(st.kw.toLowerCase()) >= 0;
       }
+      // 這堂課有幾項待準備事項（同一天、同實驗室、節次重疊或沒寫節次）
+      function todoN(b) {
+        return (U.todos || []).filter(function (t) {
+          return t.date === b.date && t.lab === b.lab && (!t.pis.length || t.pis.some(function (i) { return b.pis.indexOf(i) >= 0; }));
+        }).length;
+      }
+      function badge(b) { const n = todoN(b); return n ? ' <span class="ub-td">📝' + n + '</span>' : ''; }
       function cell(b, withLab) {
-        return '<div class="ub-b" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc(b.type + ' ' + b.note) + '"><b>' +
-          esc(b.content || b.type) + '</b><br>' + esc([withLab ? short(b.lab) : '', b.cls, b.teacher].filter(String).join(' ')) + '</div>';
+        return '<div class="ub-b" data-bi="' + U.bookings.indexOf(b) + '" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc(b.type + ' ' + b.note) + '"><b>' +
+          esc(b.content || b.type) + '</b>' + badge(b) + '<br>' + esc([withLab ? short(b.lab) : '', b.cls, b.teacher].filter(String).join(' ')) + '</div>';
       }
       function isNow(dk, p) { return dk === U.today && U.nowHm >= p.start && U.nowHm < p.end; }
       function dayTable(d, list) {
@@ -524,8 +539,8 @@ function usageBoardJs_() {
               });
             h += '<td class="' + (k === U.today ? 'today' : '') + '"><div class="dn" data-k="' + k + '">' + (+k.slice(8)) + '</div>' + es.slice(0, 7).map(function (b) {
               const who = b.labs ? b.labs.join('、') : (st.lab ? '' : short(b.lab));
-              return '<div class="e" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc([per(b.periodText), b.lab, b.content || b.type, b.cls, b.teacher].join(' ')) + '">' +
-                esc(per(b.periodText) + ' ' + [who, b.cls || '', b.content || b.type].filter(String).join(' ')) + '</div>';
+              return '<div class="e" data-bi="' + U.bookings.indexOf(b) + '" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc([per(b.periodText), b.lab, b.content || b.type, b.cls, b.teacher].join(' ')) + '">' +
+                esc(per(b.periodText) + ' ' + [who, b.cls || '', b.content || b.type].filter(String).join(' ')) + (b.labs ? '' : badge(b)) + '</div>';
             }).join('') + (es.length > 7 ? '<div class="dn" data-k="' + k + '">…還有 ' + (es.length - 7) + ' 筆</div>' : '') + '</td>';
           }
           h += '</tr>';
@@ -538,9 +553,9 @@ function usageBoardJs_() {
         list.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.pis[0] || 0) - (b.pis[0] || 0) || (a.lab < b.lab ? -1 : 1); })
           .forEach(function (b) {
             const w = '日一二三四五六'.charAt(parse(b.date).getDay());
-            h += '<tr><td style="white-space:nowrap">' + roc(b.date).slice(4) + '（' + w + '）</td><td>' + esc(b.periodText === '午' ? '中午' : b.periodText) + '</td><td>' + esc(short(b.lab)) +
+            h += '<tr data-bi="' + U.bookings.indexOf(b) + '"><td style="white-space:nowrap">' + roc(b.date).slice(4) + '（' + w + '）</td><td>' + esc(b.periodText === '午' ? '中午' : b.periodText) + '</td><td>' + esc(short(b.lab)) +
               '</td><td><span style="background:' + (U.colors[b.type] || '#eee') + ';padding:1px 6px;border-radius:8px">' + esc(b.type) + '</span></td><td>' + esc(b.content) +
-              '</td><td>' + esc(b.cls) + '</td><td>' + esc(b.teacher) + '</td></tr>';
+              badge(b) + '</td><td>' + esc(b.cls) + '</td><td>' + esc(b.teacher) + '</td></tr>';
           });
         return h + '</table></div>';
       }
@@ -563,6 +578,11 @@ function usageBoardJs_() {
         $('.ub-body').innerHTML = h;
         box.querySelectorAll('.ub-body .dn').forEach(function (e) {
           e.onclick = function () { st.mode = 'day'; st.start = e.getAttribute('data-k'); load(); };
+        });
+        // 點一堂課：看詳細、新增準備事項、補實驗名稱（有安裝「15_今日與便利」才有）
+        if (window.lessonPanel) box.querySelectorAll('.ub-body [data-bi]').forEach(function (e) {
+          e.style.cursor = 'pointer';
+          e.onclick = function (ev) { ev.stopPropagation(); window.lessonPanel(U.bookings[+e.getAttribute('data-bi')], U, opt || {}, load); };
         });
       }
       function move(n) {

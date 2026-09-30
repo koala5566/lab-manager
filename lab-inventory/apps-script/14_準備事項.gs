@@ -124,6 +124,23 @@ function todoSet(ids, status) {
   }
 }
 
+/** 期間內待準備的事項（給使用一覽標 📝）：[{id, date, lab, pis, what, qty, unit}] */
+function todoPending_(fromKey, toKey) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(TODO_SHEET);
+  if (!sh) return [];
+  const cfg = labConfig_();
+  const t = getTable_(TODO_SHEET), c = t.col;
+  if (!('狀態' in c) || !('需要日期' in c)) return [];
+  const out = [];
+  t.rows.forEach(function (r) {
+    const d = dateKey_(r[c['需要日期']]), st = String(r[c['狀態']]).trim() || '待準備';
+    if (!d || d < fromKey || d > toKey || st !== '待準備' || !String(r[c['事項']]).trim()) return;
+    out.push({ id: String(r[c['ID']]), date: d, lab: String(r[c['實驗室']]).trim(), pis: parsePeriods_(r[c['節次']], cfg.periods),
+      what: String(r[c['事項']]).trim(), qty: String(r[c['數量']]).trim(), unit: String(r[c['單位']]).trim() });
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------- 電腦：對話框
 
 function todoDialog() { todoShow_(false); }
@@ -160,6 +177,10 @@ function todoJs_() {
     window.todoInit = function (id, opt) {
       const box = document.getElementById(id);
       let T = null, view = 'todo', showAdd = !!(opt && opt.add), rows = [{}], lessons = [];
+      // opt.lesson＝從使用一覽點某一堂課進來：表單先填好，清單只列那天那間的
+      const L = opt && opt.lesson;
+      if (L) window.__tdf = { date: L.date, lab: L.lab, period: L.period, cls: L.cls, teacher: L.teacher };
+      const mine = function (x) { return !L || (x.date === L.date && x.lab === L.lab); };
       function load() {
         box.innerHTML = '<p style="color:#666">讀取中…</p>';
         google.script.run.withSuccessHandler(function (d) { T = d; draw(); if (showAdd) fetchLessons(); }).withFailureHandler(function (e) { box.textContent = '讀取失敗：' + (e.message || e); }).todoData();
@@ -171,8 +192,8 @@ function todoJs_() {
         return { t: x.roc + '（' + x.wd + '）' + tag, c: diff < 0 && x.status === '待準備' ? 'late' : diff <= 1 ? 'soon' : '' };
       }
       function draw() {
-        const todo = T.list.filter(function (x) { return x.status === '待準備'; });
-        const done = T.list.filter(function (x) { return x.status !== '待準備'; });
+        const todo = T.list.filter(function (x) { return x.status === '待準備' && mine(x); });
+        const done = T.list.filter(function (x) { return x.status !== '待準備' && mine(x); });
         let h = '<div class="td-bar"><button class="add" data-a="add">＋ 新增</button>' +
           '<button data-a="todo" class="' + (view === 'todo' ? 'on' : '') + '">待準備 ' + todo.length + '</button>' +
           '<button data-a="done" class="' + (view === 'done' ? 'on' : '') + '">最近完成 ' + done.length + '</button>' +
@@ -316,7 +337,8 @@ function todoJs_() {
         if (!items.length) { msg.className = 'td-msg err'; msg.textContent = '請至少填一樣要準備的東西。'; return; }
         const b = document.getElementById('tdSave'); b.disabled = true; b.textContent = '儲存中…';
         google.script.run.withSuccessHandler(function (m) {
-          rows = [{}]; window.__tdf = { date: f.date }; showAdd = true;
+          rows = [{}]; window.__tdf = L ? { date: L.date, lab: L.lab, period: L.period, cls: L.cls, teacher: L.teacher } : { date: f.date }; showAdd = true;
+          if (opt && opt.onSaved) opt.onSaved();
           google.script.run.withSuccessHandler(function (d) {
             T = d; view = 'todo'; draw(); fetchLessons();
             const mm = document.getElementById('tdMsg'); mm.className = 'td-msg ok'; mm.textContent = '✔ ' + m;
