@@ -131,7 +131,8 @@ function experimentDialog() {
 /** 節次文字（有 12_實驗室使用 時會把被變成日期的轉回來） */
 function pv_(v) { return typeof periodVal_ === 'function' ? periodVal_(v) : String(v == null ? '' : v).trim(); }
 
-function addExperiment(f) {
+function addExperiment(f) { return withLock_(function () { return addExperiment__(f); }); }
+function addExperiment__(f) {
   const t = setupExperimentSheet_();
   appendRow_(t, { '日期': dateValue_(f['日期']), '節次': f['節次'], '班級': f['班級'], '教師': f['教師'], '教室': f['教室'],
     '實驗名稱': f['實驗名稱'], '組數': f['組數'] ? Number(f['組數']) : '', '狀態': '待準備', '備註': f['備註'], '用途類型': '實驗課' });

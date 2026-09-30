@@ -295,7 +295,7 @@ function appendRecords_(save, dateKey) {
     return row;
   });
   const start = sh.getLastRow() + 1;
-  sh.getRange(start, 1, out.length, width).setValues(out);
+  sh.getRange(start, 1, out.length, width).setValues(out.map(function (r) { return r.map(safeCell_); }));
   sh.getRange(start, rc['盤點日期'] + 1, out.length, 1).setNumberFormat('yyyy/mm/dd');
   return dupRows.length;
 }

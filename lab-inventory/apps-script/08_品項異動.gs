@@ -107,7 +107,7 @@ function addItem(f) {
     ['排序位置', '化學式或規格'].forEach(function (k) {
       if (k in items.col) items.sheet.getRange(r, items.col[k] + 1).setNumberFormat('@');
     });
-    items.sheet.getRange(r, 1, 1, row.length).setValues([row]);
+    items.sheet.getRange(r, 1, 1, row.length).setValues([row.map(safeCell_)]);
 
     let qtyMsg = '';
     if (f['數量']) {
@@ -243,9 +243,9 @@ function recordMovement(m) {
       const to = [m.room, m.cab, m.pos].filter(String).join(' ');
       if (from === to) throw new Error('新位置和原本一樣。');
       items.sheet.getRange(rowNo, ic['排序位置'] + 1).setNumberFormat('@');
-      items.sheet.getRange(rowNo, ic['教室'] + 1).setValue(m.room);
-      items.sheet.getRange(rowNo, ic['櫃別'] + 1).setValue(m.cab);
-      items.sheet.getRange(rowNo, ic['排序位置'] + 1).setValue(m.pos);
+      items.sheet.getRange(rowNo, ic['教室'] + 1).setValue(safeCell_(m.room));
+      items.sheet.getRange(rowNo, ic['櫃別'] + 1).setValue(safeCell_(m.cab));
+      items.sheet.getRange(rowNo, ic['排序位置'] + 1).setValue(safeCell_(m.pos));
       desc = '由「' + from + '」移到「' + to + '」' + (desc ? '；' + desc : '');
       msgs.push('位置已改為：' + to + '（藥品記得重印櫃標示）');
     } else {
@@ -277,7 +277,7 @@ function recordMovement(m) {
     put('日期', dateValue); put('編號', m.code); put('品名', name); put('類型', m.type);
     put('數量', m.type === '移位' ? '' : Number(m.qty)); put('說明', desc); put('經手人', m.who || '');
     const at = mv.sheet.getLastRow() + 1;
-    mv.sheet.getRange(at, 1, 1, out.length).setValues([out]);
+    mv.sheet.getRange(at, 1, 1, out.length).setValues([out.map(safeCell_)]);
     mv.sheet.getRange(at, mv.col['日期'] + 1).setNumberFormat('yyyy/mm/dd');
     if (typeof recordBaseline_ === 'function') recordBaseline_();
     return '已登記「' + name + '」' + m.type + (m.type === '移位' ? '' : ' ' + m.qty) + '。\n' + msgs.join('\n');
@@ -300,6 +300,6 @@ function replaceDayRecord_(code, name, dateKey, dateValue, qty, label) {
   row[rc['存放處']] = ''; row[rc['數量']] = qty; row[rc['數量說明']] = '';
   row[rc['登錄時間']] = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy/MM/dd HH:mm');
   const at = sh.getLastRow() + 1;
-  sh.getRange(at, 1, 1, row.length).setValues([row]);
+  sh.getRange(at, 1, 1, row.length).setValues([row.map(safeCell_)]);
   sh.getRange(at, rc['盤點日期'] + 1).setNumberFormat('yyyy/mm/dd');
 }

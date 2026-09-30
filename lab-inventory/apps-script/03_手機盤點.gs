@@ -71,7 +71,7 @@ function mobileSave(item) {
     if (i < 0) throw new Error('盤點表找不到「' + item.code + '」，可能已在電腦上完成盤點或重新產生。請重新整理頁面。');
     const qty = String(item.qty || '').trim();
     const value = qty !== '' && isNumber_(qty) ? Number(qty) : qty;
-    t.sheet.getRange(i + 2, c['本次數量'] + 1, 1, 2).setValues([[value, String(item.note || '').trim()]]);
+    t.sheet.getRange(i + 2, c['本次數量'] + 1, 1, 2).setValues([[safeCell_(value), safeCell_(String(item.note || '').trim())]]);
     return true;
   } finally {
     lock.releaseLock();

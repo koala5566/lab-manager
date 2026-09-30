@@ -45,6 +45,13 @@ function ensureSheet_(name, cols, widths, tabColor) {
   return getTable_(name);
 }
 
+/** 同一時間只讓一個存檔動作寫入（手機、電腦同時存時排隊，避免寫到同一列）。 */
+function withLock_(fn) {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('系統正在存別的資料，請等幾秒再按一次。');
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
 function listRule_(values) {
   return SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build();
 }
@@ -129,7 +136,7 @@ function setupPurchaseSheet_() {
  */
 function appendRow_(t, obj) {
   const row = new Array(t.header.length).fill('');
-  Object.keys(obj).forEach(function (k) { if (k in t.col && k !== '預估金額') row[t.col[k]] = obj[k]; });
+  Object.keys(obj).forEach(function (k) { if (k in t.col && k !== '預估金額') row[t.col[k]] = safeCell_(obj[k]); });
   const vals = t.sheet.getRange(2, 1, Math.max(1, t.sheet.getMaxRows() - 1), 1).getValues();
   let last = vals.length;
   while (last > 0 && String(vals[last - 1][0]).trim() === '') last--;
@@ -180,7 +187,8 @@ function purchaseDialog() {
   showDialog_(html, data, '🛒 新增請購需求', 600);
 }
 
-function addPurchase(f) {
+function addPurchase(f) { return withLock_(function () { return addPurchase__(f); }); }
+function addPurchase__(f) {
   const t = setupPurchaseSheet_();
   const r = appendRow_(t, {
     '登記日期': dateValue_(today_()), '需求來源': f['需求來源'], '品名': f['品名'], '規格': f['規格'],
@@ -194,7 +202,8 @@ function addPurchase(f) {
 }
 
 /** 把需補充清單中、還沒有「待處理／已請購」的品項加入請購清單。 */
-function addRestockToPurchase() {
+function addRestockToPurchase() { return withLock_(addRestockToPurchase__); }
+function addRestockToPurchase__() {
   if (typeof restockItems_ !== 'function') throw new Error('需要先安裝「06_補充查詢」。');
   const t = setupPurchaseSheet_();
   const c = t.col;
@@ -257,7 +266,7 @@ function receiveDialog() {
       function go() {
         const list = [];
         D.rows.forEach(function (r, i) {
-          if (document.getElementById('c' + i).checked) list.push({ row: r.row, qty: document.getElementById('q' + i).value.trim() });
+          if (document.getElementById('c' + i).checked) list.push({ row: r.row, name: r.name, qty: document.getElementById('q' + i).value.trim() });
         });
         if (!list.length) { alert('請勾選到貨的項目。'); return; }
         if (list.some(function (x) { return x.qty === '' || isNaN(Number(x.qty)); })) { alert('到貨數請填數字。'); return; }
@@ -270,14 +279,32 @@ function receiveDialog() {
   showDialog_(html, { rows: rows, today: today_() }, '📦 到貨入庫', 200 + rows.length * 52);
 }
 
+/**
+ * 到貨入庫。為了避免「重複入庫」和「列號跑掉入到別的東西」：
+ *   ・那一列的品名要對得上、狀態要還是「待處理／已請購」才入庫；
+ *   ・列號對不上（中間有人刪列）就用品名找還沒到貨的那一筆（只有一筆時才用）。
+ */
 function receivePurchases(list, date) {
   date = date || today_();
   const t = getTable_(REQ_SHEET);
   const c = t.col;
-  const msgs = [], newOnes = [];
+  const msgs = [], newOnes = [], skipped = [];
+  const open = function (r) { const s = String(r[c['狀態']]).trim(); return s === '待處理' || s === '已請購' || s === ''; };
+  const nameOf = function (r) { return String(r[c['品名']]).trim(); };
+  let done = 0;
   list.forEach(function (x) {
-    const r = t.rows[x.row - 2];
-    if (!r) return;
+    let rowNo = Number(x.row), r = t.rows[rowNo - 2];
+    const want = String(x.name || '').trim();
+    if (!r || (want && nameOf(r) !== want) || !open(r)) {
+      if (r && want && nameOf(r) === want && !open(r)) { skipped.push(want + '（已經是「' + String(r[c['狀態']]).trim() + '」，沒有再入庫）'); return; }
+      const hits = [];
+      t.rows.forEach(function (rr, i) { if (want && nameOf(rr) === want && open(rr)) hits.push(i + 2); });
+      if (hits.length !== 1) { skipped.push((want || '第 ' + rowNo + ' 列') + '（找不到還沒到貨的這一筆，請重新開啟到貨入庫）'); return; }
+      rowNo = hits[0]; r = t.rows[rowNo - 2];
+    }
+    x = Object.assign({}, x, { row: rowNo });
+    r[c['狀態']] = '已到貨';
+    done++;
     const name = String(r[c['品名']]), code = String(r[c['對應品項編號']]).trim();
     t.sheet.getRange(x.row, c['狀態'] + 1).setValue('已到貨');
     t.sheet.getRange(x.row, c['到貨日期'] + 1).setValue(dateValue_(date));
@@ -290,8 +317,9 @@ function receivePurchases(list, date) {
       newOnes.push(name);
     }
   });
-  return '到貨入庫完成：' + list.length + ' 項。\n' + msgs.join('\n') +
-    (newOnes.length ? '\n\n還沒建檔的新東西（請用「📦 品項 → 新增品項」建檔並填數量）：\n' + newOnes.join('、') : '');
+  return '到貨入庫完成：' + done + ' 項。\n' + msgs.join('\n') +
+    (newOnes.length ? '\n\n還沒建檔的新東西（請用「📦 品項 → 新增品項」建檔並填數量）：\n' + newOnes.join('、') : '') +
+    (skipped.length ? '\n\n⚠ 略過：\n' + skipped.join('\n') : '');
 }
 
 // ---------------------------------------------------------------- 🛒 請購：列印
@@ -390,7 +418,8 @@ function loanDialog() {
   showDialog_(html, { items: pickerItems_(), today: today_() }, '🤝 借出登記', 480);
 }
 
-function addLoan(f) {
+function addLoan(f) { return withLock_(function () { return addLoan__(f); }); }
+function addLoan__(f) {
   const t = setupLoanSheet_();
   appendRow_(t, { '借出日期': dateValue_(f.date || today_()), '借用人': f.who, '品項編號': f.code, '品名': f.name,
     '數量': Number(f.qty), '用途': f.use, '預計歸還': dateValue_(f.due), '狀態': '借出中', '備註': f.note });
@@ -427,7 +456,7 @@ function returnDialog() {
         l.appendChild(sm); document.getElementById('list').appendChild(l);
       });
       function go() {
-        const rows = D.rows.filter(function (r, i) { return document.getElementById('c' + i).checked; }).map(function (r) { return r.row; });
+        const rows = D.rows.filter(function (r, i) { return document.getElementById('c' + i).checked; }).map(function (r) { return { row: r.row, name: r.name }; });
         if (!rows.length) { alert('請勾選歸還的項目。'); return; }
         const b = document.getElementById('go'); b.disabled = true; b.textContent = '登記中…';
         google.script.run.withSuccessHandler(showDone)
@@ -438,12 +467,28 @@ function returnDialog() {
   showDialog_(html, { rows: rows, today: today_() }, '🤝 歸還登記', 200 + rows.length * 44);
 }
 
+/** 歸還：品名要對得上、狀態要是「借出中」；列號跑掉時用品名找（只有一筆借出中才用）。 */
 function returnLoans(rows, date) {
-  const t = getTable_(LOAN_SHEET);
-  const c = t.col;
-  rows.forEach(function (row) {
-    t.sheet.getRange(row, c['狀態'] + 1).setValue('已歸還');
-    t.sheet.getRange(row, c['歸還日期'] + 1).setValue(dateValue_(date || today_()));
+  return withLock_(function () {
+    const t = getTable_(LOAN_SHEET);
+    const c = t.col;
+    const isOut = function (r) { return String(r[c['狀態']]).trim() === '借出中'; };
+    let n = 0; const skipped = [];
+    rows.forEach(function (x) {
+      if (typeof x !== 'object') x = { row: x, name: '' };
+      let rowNo = Number(x.row), r = t.rows[rowNo - 2];
+      const want = String(x.name || '').trim();
+      if (!r || !isOut(r) || (want && String(r[c['品名']]).trim() !== want)) {
+        const hits = [];
+        t.rows.forEach(function (rr, i) { if (want && String(rr[c['品名']]).trim() === want && isOut(rr)) hits.push(i + 2); });
+        if (hits.length !== 1) { skipped.push(want || '第 ' + rowNo + ' 列'); return; }
+        rowNo = hits[0]; r = t.rows[rowNo - 2];
+      }
+      r[c['狀態']] = '已歸還';
+      t.sheet.getRange(rowNo, c['狀態'] + 1).setValue('已歸還');
+      t.sheet.getRange(rowNo, c['歸還日期'] + 1).setValue(dateValue_(date || today_()));
+      n++;
+    });
+    return '已登記歸還 ' + n + ' 項。' + (skipped.length ? '\n⚠ 略過（已經歸還或找不到）：' + skipped.join('、') : '');
   });
-  return '已登記歸還 ' + rows.length + ' 項。';
 }

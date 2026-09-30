@@ -317,7 +317,7 @@ function importApply(o) {
     fixPeriodCol_(sh, c['節次'] + 1);
     if (all.length + 1 > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), all.length + 51 - sh.getMaxRows());
     sh.getRange(2, 1, sh.getMaxRows() - 1, w).clearContent();
-    if (all.length) sh.getRange(2, 1, all.length, w).setValues(all);
+    if (all.length) sh.getRange(2, 1, all.length, w).setValues(all.map(function (r) { return r.map(safeCell_); }));
     const noName = fresh.filter(function (r) { return r[c['用途類型']] === '實驗課' && !String(r[c['實驗名稱']]).trim(); }).length;
     return '已匯入 ' + fresh.length + ' 筆到「實驗排程」' + (p.old.length ? '（取代上次匯入的 ' + p.old.length + ' 筆）' : '') + '。' +
       (noName ? '\n\n還有 ' + noName + ' 筆實驗課沒有實驗名稱：問到老師後，在「實驗排程」的「實驗名稱」欄補上，或再匯入一次時填。' : '') +

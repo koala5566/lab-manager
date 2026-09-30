@@ -196,10 +196,12 @@ function pad2_(n) { return (n < 10 ? '0' : '') + n; }
 function dateKey_(v) {
   if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
   const s = String(v || '').trim();
+  // 不存在的日期（例：2/30、13 月）回傳 ''
+  const ok = function (y, mo, d) { const t = new Date(y, mo - 1, d); return t.getFullYear() === y && t.getMonth() === mo - 1 && t.getDate() === d; };
   let m = s.match(/^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})$/);
-  if (m) return m[1] + '-' + pad2_(Number(m[2])) + '-' + pad2_(Number(m[3]));
+  if (m) return ok(+m[1], +m[2], +m[3]) ? m[1] + '-' + pad2_(Number(m[2])) + '-' + pad2_(Number(m[3])) : '';
   m = s.match(/^(\d{2,3})[.\/-](\d{1,2})[.\/-](\d{1,2})$/);
-  if (m) return (Number(m[1]) + 1911) + '-' + pad2_(Number(m[2])) + '-' + pad2_(Number(m[3]));
+  if (m) return ok(+m[1] + 1911, +m[2], +m[3]) ? (Number(m[1]) + 1911) + '-' + pad2_(Number(m[2])) + '-' + pad2_(Number(m[3])) : '';
   return '';
 }
 
@@ -208,6 +210,21 @@ function rocText_(v) {
   const k = /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : dateKey_(v);
   if (!k) return String(v || '');
   return (Number(k.slice(0, 4)) - 1911) + '.' + k.slice(5, 7) + '.' + k.slice(8, 10);
+}
+
+/**
+ * 要寫進儲存格的文字：開頭是 = + @（或 - 但不是數字）時，試算表會當成公式（例：「+886」變 #ERROR!）。
+ * 前面加 ' 讓它當純文字（儲存格裡看不到這個 '）。
+ */
+function safeCell_(v) {
+  if (typeof v !== 'string') return v;
+  if (/^[=+@]/.test(v) || (/^-/.test(v) && isNaN(Number(v)))) return "'" + v;
+  return v;
+}
+
+/** 全形數字、符號轉半形：「３－４」→「3-4」 */
+function halfWidth_(s) {
+  return String(s == null ? '' : s).replace(/[０-９Ａ-Ｚａ-ｚ－，．]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
 }
 
 function isNumber_(v) {

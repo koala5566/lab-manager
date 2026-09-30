@@ -99,7 +99,7 @@ function periodShort_(name) {
  */
 function periodVal_(v) {
   if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz_(), 'M-d');
-  return String(v == null ? '' : v).trim();
+  return halfWidth_(v).trim();   // 全形「３－４」也認得
 }
 
 /** 把某欄（節次）設成純文字，已經被變成日期的改回「3-4」。col1＝第幾欄（從 1 起）。 */
@@ -353,9 +353,12 @@ function bookDialog() {
 }
 
 /** 存登記：同一天、同班級的連續節次合併成一筆；可每週重複；撞堂時先回報（force 才寫入）。 */
-function saveBooking(p) {
+function saveBooking(p) { return withLock_(function () { return saveBooking__(p); }); }
+function saveBooking__(p) {
   const cfg = labConfig_();
   if (!p.slots || !p.slots.length) throw new Error('沒有選時段。');
+  p.slots = p.slots.filter(function (s) { return cfg.periods[s.pi] && dateKey_(s.date); });   // 節次、日期不對的略過
+  if (!p.slots.length) throw new Error('選的時段不正確，請重新整理後再選。');
   // 每週重複
   let slots = p.slots.slice();
   const until = dateKey_(p.repeat);
