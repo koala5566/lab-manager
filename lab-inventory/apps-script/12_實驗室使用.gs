@@ -197,7 +197,7 @@ function bookings_(fromKey, toKey, cfg) {
 function usageData(fromKey, days) {
   const cfg = labConfig_();
   fromKey = dateKey_(fromKey) || today_();
-  days = Math.max(1, Math.min(14, Number(days) || 1));
+  days = Math.max(1, Math.min(120, Number(days) || 1));
   const toKey = addDays_(fromKey, days - 1);
   const list = [];
   for (let i = 0; i < days; i++) {
@@ -393,74 +393,199 @@ function usageBoard() {
   SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(1100).setHeight(780), '🗓 六間實驗室使用一覽');
 }
 
-/** 使用一覽的畫面程式（電腦對話框、手機網頁共用）。呼叫 boardInit(容器id, {print}) 開始。 */
+/**
+ * 使用一覽的畫面程式（電腦對話框、手機網頁共用）。呼叫 boardInit(容器id, {print}) 開始。
+ * 檢視：單日（六間 × 各節）、整週、月曆、清單（任選期間）；可跳到任一天、只看某一間、用關鍵字找（例：二敬、仲文、多元選修）。
+ */
 function usageBoardJs_() {
   return `
   (function () {
     const css = document.createElement('style');
-    css.textContent = '.ub-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px}.ub-bar button{padding:6px 12px;font-size:14px;border:1px solid #dadce0;border-radius:6px;background:#fff}' +
-      '.ub-bar button.on{background:#1a73e8;color:#fff;border-color:#1a73e8}.ub-title{font-weight:bold;font-size:16px;margin-right:auto}' +
-      '.ub-wrap{overflow-x:auto;margin-bottom:14px}table.ub{border-collapse:collapse;width:100%;min-width:640px;table-layout:fixed;background:#fff}table.ub th,table.ub td{border:1px solid #dadce0;padding:3px;font-size:12px;text-align:center;vertical-align:middle;height:40px}' +
+    css.textContent = '.ub-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 6px}.ub-bar button{padding:6px 11px;font-size:14px;border:1px solid #dadce0;border-radius:6px;background:#fff;cursor:pointer}' +
+      '.ub-bar button.on{background:#1a73e8;color:#fff;border-color:#1a73e8}.ub-bar input,.ub-bar select{width:auto;margin:0;font-size:14px;padding:5px 6px;border:1px solid #dadce0;border-radius:6px;background:#fff;max-width:100%}' +
+      '.ub-bar .ub-date,.ub-bar .ub-end,.ub-bar .ub-lab{width:auto!important}.ub-bar .ub-kw{width:auto!important;flex:1;min-width:140px}.ub-to{display:inline-flex;align-items:center;gap:4px}' +
+      '.ub-title{font-weight:bold;font-size:16px;margin:2px 0 8px}.ub-sp{flex:1}' +
+      '.ub-wrap{overflow-x:auto;margin-bottom:14px}table.ub{border-collapse:collapse;width:100%;min-width:560px;table-layout:fixed;background:#fff}table.ub th,table.ub td{border:1px solid #dadce0;padding:3px;font-size:12px;text-align:center;vertical-align:middle;height:40px}' +
       'table.ub th{background:#f1f3f4}table.ub tr>th:first-child{position:sticky;left:0;z-index:1}table.ub th small{color:#5f6368;font-weight:normal}table.ub tr.now th,table.ub tr.now td{box-shadow:inset 0 0 0 2px #d93025}' +
-      'table.ub tr.now th{background:#fce8e6;color:#b3261e}.ub-day{font-weight:bold;margin:6px 0 4px}.ub-b{border-radius:4px;padding:2px;line-height:1.25;margin:1px 0}' +
-      '.ub-legend span{display:inline-block;padding:2px 8px;border-radius:10px;margin:2px;font-size:12px}@media print{.ub-bar{display:none}}';
+      'table.ub tr.now th{background:#fce8e6;color:#b3261e}table.ub th.today{background:#d2e3fc}.ub-day{font-weight:bold;margin:6px 0 4px}.ub-b{border-radius:4px;padding:2px;line-height:1.25;margin:1px 0}' +
+      'table.um{border-collapse:collapse;width:100%;min-width:620px;table-layout:fixed;background:#fff}table.um th{background:#f1f3f4;border:1px solid #dadce0;padding:4px;font-size:13px}' +
+      'table.um td{border:1px solid #dadce0;vertical-align:top;padding:2px 3px;height:74px;font-size:11px;text-align:left}table.um td.out{background:#f8f9fa;color:#bbb}table.um td.today{box-shadow:inset 0 0 0 2px #1a73e8}' +
+      'table.um .dn{font-weight:bold;font-size:12px;cursor:pointer;color:#1a73e8}table.um .e{border-radius:3px;padding:1px 3px;margin:1px 0;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      'table.ul{border-collapse:collapse;width:100%;background:#fff}table.ul th,table.ul td{border:1px solid #dadce0;padding:4px 6px;font-size:13px;text-align:left}table.ul th{background:#f1f3f4}' +
+      '.ub-cnt{color:#5f6368;font-size:13px;margin:4px 0}.ub-legend span{display:inline-block;padding:2px 8px;border-radius:10px;margin:2px;font-size:12px}' +
+      '@media print{.ub-bar{display:none}.ub-wrap{overflow:visible}}';
     document.head.appendChild(css);
     function key(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
     function parse(k) { const a = k.split('-'); return new Date(+a[0], +a[1] - 1, +a[2]); }
+    function add(k, n) { const d = parse(k); d.setDate(d.getDate() + n); return key(d); }
+    function monday(k) { const d = parse(k); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return key(d); }
+    function roc(k) { return (+k.slice(0, 4) - 1911) + '.' + k.slice(5, 7) + '.' + k.slice(8, 10); }
     function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function short(lab) { return String(lab).replace(/學?實驗室/, ''); }
+    function per(t) { return t === '午' ? '午' : t; }
     window.boardInit = function (id, opt) {
       const box = document.getElementById(id);
-      const st = { mode: 'day', start: key(new Date()) };
-      function move(n) { const d = parse(st.start); d.setDate(d.getDate() + n); st.start = key(d); load(); }
-      function load() {
-        let from = st.start;
-        if (st.mode === 'week') { const d = parse(st.start); d.setDate(d.getDate() - (d.getDay() + 6) % 7); from = key(d); st.start = from; }
-        box.innerHTML = '<p style="color:#666">讀取中…</p>';
-        google.script.run.withSuccessHandler(draw).withFailureHandler(function (e) { box.textContent = '讀取失敗：' + (e.message || e); })
-          .usageData(from, st.mode === 'week' ? 7 : 1);
+      const st = { mode: 'day', start: key(new Date()), end: '', lab: '', kw: '' };
+      let U = null;
+      box.innerHTML = '<div class="ub-bar">' +
+        '<button data-a="prev">◀</button><button data-a="today">今天</button><button data-a="next">▶</button>' +
+        '<input type="date" class="ub-date" title="跳到這一天">' +
+        '<span class="ub-to" style="display:none">到 <input type="date" class="ub-end"></span>' +
+        '<span class="ub-sp"></span>' +
+        '<button data-m="day">單日</button><button data-m="week">整週</button><button data-m="month">月曆</button><button data-m="list">清單</button>' +
+        '</div><div class="ub-bar"><select class="ub-lab"><option value="">全部實驗室</option></select>' +
+        '<input class="ub-kw" placeholder="找：班級、老師、實驗…">' +
+        (opt && opt.print ? '<button data-a="print">🖨 列印</button>' : '') + '</div><div class="ub-title"></div><div class="ub-body"></div>';
+      const $ = function (c) { return box.querySelector(c); };
+      function range() {
+        if (st.mode === 'day') return [st.start, 1];
+        if (st.mode === 'week') return [monday(st.start), 7];
+        if (st.mode === 'month') {
+          const d = parse(st.start), first = key(new Date(d.getFullYear(), d.getMonth(), 1));
+          return [first, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()];
+        }
+        if (!st.end || st.end < st.start) st.end = add(st.start, 29);
+        const n = Math.round((parse(st.end) - parse(st.start)) / 86400000) + 1;
+        if (n > 120) { st.end = add(st.start, 119); return [st.start, 120]; }
+        return [st.start, n];
       }
-      function day(U, d) {
-        let h = '<div class="ub-wrap"><table class="ub"><tr><th style="width:70px">節次</th>' + U.rooms.map(function (r) { return '<th>' + esc(r) + '</th>'; }).join('') + '</tr>';
+      function load() {
+        const r = range();
+        box.querySelectorAll('[data-m]').forEach(function (b) { b.className = b.getAttribute('data-m') === st.mode ? 'on' : ''; });
+        $('.ub-date').value = st.start; $('.ub-to').style.display = st.mode === 'list' ? '' : 'none'; $('.ub-end').value = st.end || '';
+        $('.ub-body').innerHTML = '<p style="color:#666">讀取中…</p>';
+        google.script.run.withSuccessHandler(function (u) {
+          U = u;
+          const sel = $('.ub-lab');
+          if (sel.options.length === 1) U.rooms.forEach(function (x) { sel.add(new Option(x, x)); });
+          sel.value = st.lab;
+          draw();
+        }).withFailureHandler(function (e) { $('.ub-body').textContent = '讀取失敗：' + (e.message || e); }).usageData(r[0], r[1]);
+      }
+      function hit(b) {
+        if (st.lab && b.lab !== st.lab) return false;
+        if (!st.kw) return true;
+        return [b.content, b.type, b.cls, b.teacher, b.lab, b.note].join(' ').toLowerCase().indexOf(st.kw.toLowerCase()) >= 0;
+      }
+      function cell(b, withLab) {
+        return '<div class="ub-b" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc(b.type + ' ' + b.note) + '"><b>' +
+          esc(b.content || b.type) + '</b><br>' + esc([withLab ? short(b.lab) : '', b.cls, b.teacher].filter(String).join(' ')) + '</div>';
+      }
+      function isNow(dk, p) { return dk === U.today && U.nowHm >= p.start && U.nowHm < p.end; }
+      function dayTable(d, list) {
+        const rooms = st.lab ? [st.lab] : U.rooms;
+        let h = '<div class="ub-wrap"><table class="ub"><tr><th style="width:70px">節次</th>' + rooms.map(function (r) { return '<th>' + esc(r) + '</th>'; }).join('') + '</tr>';
         U.periods.forEach(function (p, pi) {
-          const now = d.key === U.today && U.nowHm >= p.start && U.nowHm < p.end;
+          const now = isNow(d.key, p);
           h += '<tr' + (now ? ' class="now"' : '') + '><th>' + esc(p.name) + (now ? ' ●' : '') + '<br><small>' + p.start + '–' + p.end + '</small></th>';
-          U.rooms.forEach(function (r) {
-            const bs = U.bookings.filter(function (b) { return b.lab === r && b.date === d.key && b.pis.indexOf(pi) >= 0; });
-            h += '<td>' + bs.map(function (b) {
-              return '<div class="ub-b" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc(b.type + ' ' + b.note) + '"><b>' +
-                esc(b.content || b.type) + '</b><br>' + esc([b.cls, b.teacher].filter(String).join(' ')) + '</div>';
-            }).join('') + '</td>';
+          rooms.forEach(function (r) {
+            h += '<td>' + list.filter(function (b) { return b.lab === r && b.date === d.key && b.pis.indexOf(pi) >= 0; }).map(function (b) { return cell(b); }).join('') + '</td>';
           });
           h += '</tr>';
         });
         return h + '</table></div>';
       }
-      function draw(U) {
-        let h = '<div class="ub-bar"><span class="ub-title">' + (st.mode === 'day' ? U.days[0].roc + '（' + U.days[0].wd + '）' :
-          U.days[0].roc + '～' + U.days[6].roc.slice(4)) + '</span>' +
-          '<button data-a="prev">◀</button><button data-a="today">今天</button><button data-a="next">▶</button>' +
-          '<button data-a="day" class="' + (st.mode === 'day' ? 'on' : '') + '">單日</button><button data-a="week" class="' + (st.mode === 'week' ? 'on' : '') + '">整週</button>' +
-          (opt && opt.print ? '<button data-a="print">🖨 列印</button>' : '') + '</div>';
-        const days = st.mode === 'day' ? U.days : U.days.filter(function (d, i) {
-          return i < 5 || U.bookings.some(function (b) { return b.date === d.key; });
+      // 一間實驗室的一週：節次 × 天（和門口課表一樣）
+      function weekGrid(days, list) {
+        let h = '<div class="ub-wrap"><table class="ub"><tr><th style="width:70px">節次</th>' + days.map(function (d) {
+          return '<th class="' + (d.key === U.today ? 'today' : '') + '">' + d.roc.slice(4) + '<br><small>（' + d.wd + '）</small></th>';
+        }).join('') + '</tr>';
+        U.periods.forEach(function (p, pi) {
+          h += '<tr><th>' + esc(p.name) + '<br><small>' + p.start + '–' + p.end + '</small></th>';
+          days.forEach(function (d) {
+            h += '<td style="' + (isNow(d.key, p) ? 'box-shadow:inset 0 0 0 2px #d93025' : '') + '">' +
+              list.filter(function (b) { return b.date === d.key && b.pis.indexOf(pi) >= 0; }).map(function (b) { return cell(b, !st.lab); }).join('') + '</td>';
+          });
+          h += '</tr>';
         });
-        days.forEach(function (d) {
-          if (st.mode === 'week') h += '<div class="ub-day">' + d.roc + '（' + d.wd + '）' + (d.key === U.today ? '　今天' : '') + '</div>';
-          h += day(U, d);
-        });
+        return h + '</table></div>';
+      }
+      function month(list) {
+        const days = U.days, first = parse(days[0].key);
+        const weekend = list.some(function (b) { const w = parse(b.date).getDay(); return w === 0 || w === 6; });
+        const cols = weekend ? 7 : 5;
+        let h = '<div class="ub-wrap"><table class="um"><tr>' + ['一', '二', '三', '四', '五', '六', '日'].slice(0, cols).map(function (w) { return '<th>' + w + '</th>'; }).join('') + '</tr>';
+        let k = monday(days[0].key);
+        const last = days[days.length - 1].key;
+        while (k <= last) {
+          h += '<tr>';
+          for (let i = 0; i < 7; i++, k = add(k, 1)) {
+            if (i >= cols) continue;
+            const inMonth = parse(k).getMonth() === first.getMonth();
+            if (!inMonth) { h += '<td class="out">' + (+k.slice(8)) + '</td>'; continue; }
+            // 放假、考試等同一天多間一樣的合併成一條
+            const seen = {};
+            const es = list.filter(function (b) { return b.date === k; }).sort(function (a, b) { return (a.pis[0] || 0) - (b.pis[0] || 0) || (a.lab < b.lab ? -1 : 1); })
+              .filter(function (b) {
+                if (b.type !== '放假' && b.type !== '考試') return true;
+                const g = b.type + b.content + b.periodText;
+                if (seen[g]) { seen[g].labs.push(short(b.lab)); return false; }
+                seen[g] = b; b.labs = [short(b.lab)]; return true;
+              });
+            h += '<td class="' + (k === U.today ? 'today' : '') + '"><div class="dn" data-k="' + k + '">' + (+k.slice(8)) + '</div>' + es.slice(0, 7).map(function (b) {
+              const who = b.labs ? b.labs.join('、') : (st.lab ? '' : short(b.lab));
+              return '<div class="e" style="background:' + (U.colors[b.type] || '#eee') + '" title="' + esc([per(b.periodText), b.lab, b.content || b.type, b.cls, b.teacher].join(' ')) + '">' +
+                esc(per(b.periodText) + ' ' + [who, b.cls || '', b.content || b.type].filter(String).join(' ')) + '</div>';
+            }).join('') + (es.length > 7 ? '<div class="dn" data-k="' + k + '">…還有 ' + (es.length - 7) + ' 筆</div>' : '') + '</td>';
+          }
+          h += '</tr>';
+        }
+        return h + '</table></div><div class="ub-cnt">點日期可以看那一天的詳細課表。</div>';
+      }
+      function listView(list) {
+        if (!list.length) return '<p class="ub-cnt">這段期間沒有符合的登記。</p>';
+        let h = '<div class="ub-cnt">共 ' + list.length + ' 筆</div><div class="ub-wrap"><table class="ul"><tr><th>日期</th><th>節次</th><th>實驗室</th><th>類型</th><th>內容</th><th>班級</th><th>老師</th></tr>';
+        list.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.pis[0] || 0) - (b.pis[0] || 0) || (a.lab < b.lab ? -1 : 1); })
+          .forEach(function (b) {
+            const w = '日一二三四五六'.charAt(parse(b.date).getDay());
+            h += '<tr><td style="white-space:nowrap">' + roc(b.date).slice(4) + '（' + w + '）</td><td>' + esc(b.periodText === '午' ? '中午' : b.periodText) + '</td><td>' + esc(short(b.lab)) +
+              '</td><td><span style="background:' + (U.colors[b.type] || '#eee') + ';padding:1px 6px;border-radius:8px">' + esc(b.type) + '</span></td><td>' + esc(b.content) +
+              '</td><td>' + esc(b.cls) + '</td><td>' + esc(b.teacher) + '</td></tr>';
+          });
+        return h + '</table></div>';
+      }
+      function draw() {
+        if (!U) return;
+        const list = U.bookings.filter(hit);
+        const d0 = U.days[0], dn = U.days[U.days.length - 1];
+        $('.ub-title').textContent = st.mode === 'day' ? d0.roc + '（' + d0.wd + '）' + (d0.key === U.today ? '　今天' : '') :
+          st.mode === 'month' ? (+d0.key.slice(0, 4) - 1911) + ' 年 ' + (+d0.key.slice(5, 7)) + ' 月' :
+          d0.roc + '（' + d0.wd + '）～' + dn.roc.slice(4) + '（' + dn.wd + '）';
+        let h = '';
+        if (st.mode === 'day') h = dayTable(d0, list);
+        else if (st.mode === 'week') {
+          const days = U.days.filter(function (d, i) { return i < 5 || list.some(function (b) { return b.date === d.key; }); });
+          if (st.lab || st.kw) h = weekGrid(days, list);
+          else days.forEach(function (d) { h += '<div class="ub-day">' + d.roc + '（' + d.wd + '）' + (d.key === U.today ? '　今天' : '') + '</div>' + dayTable(d, list); });
+        } else if (st.mode === 'month') h = month(list);
+        else h = listView(list);
         h += '<div class="ub-legend">' + Object.keys(U.colors).map(function (t) { return '<span style="background:' + U.colors[t] + '">' + esc(t) + '</span>'; }).join('') + '</div>';
-        box.innerHTML = h;
-        box.querySelectorAll('.ub-bar button').forEach(function (b) {
-          b.onclick = function () {
-            const a = b.getAttribute('data-a');
-            if (a === 'prev') move(st.mode === 'week' ? -7 : -1);
-            else if (a === 'next') move(st.mode === 'week' ? 7 : 1);
-            else if (a === 'today') { st.start = key(new Date()); load(); }
-            else if (a === 'print') window.print();
-            else { st.mode = a; load(); }
-          };
+        $('.ub-body').innerHTML = h;
+        box.querySelectorAll('.ub-body .dn').forEach(function (e) {
+          e.onclick = function () { st.mode = 'day'; st.start = e.getAttribute('data-k'); load(); };
         });
       }
+      function move(n) {
+        if (st.mode === 'month') { const d = parse(st.start); st.start = key(new Date(d.getFullYear(), d.getMonth() + n, 1)); }
+        else if (st.mode === 'list') { const r = range(); st.start = add(st.start, n * r[1]); st.end = add(st.end, n * r[1]); }
+        else st.start = add(st.start, n * (st.mode === 'week' ? 7 : 1));
+        load();
+      }
+      box.querySelectorAll('.ub-bar button').forEach(function (b) {
+        b.onclick = function () {
+          const a = b.getAttribute('data-a'), m = b.getAttribute('data-m');
+          if (m) { st.mode = m; if (m === 'list' && !st.end) st.end = add(st.start, 29); load(); }
+          else if (a === 'prev') move(-1);
+          else if (a === 'next') move(1);
+          else if (a === 'today') { st.start = key(new Date()); if (st.mode === 'list') st.end = add(st.start, 29); load(); }
+          else if (a === 'print') window.print();
+        };
+      });
+      $('.ub-date').onchange = function () { if (this.value) { st.start = this.value; if (st.mode === 'list' && st.end < st.start) st.end = add(st.start, 29); load(); } };
+      $('.ub-end').onchange = function () { if (this.value) { st.end = this.value; load(); } };
+      $('.ub-lab').onchange = function () { st.lab = this.value; draw(); };
+      let tm = null;
+      $('.ub-kw').oninput = function () { const v = this.value.trim(); clearTimeout(tm); tm = setTimeout(function () { st.kw = v; draw(); }, 250); };
       load();
     };
   })();`;

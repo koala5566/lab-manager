@@ -18,11 +18,8 @@ function setupExperimentSheet_() {
   const sh = t.sheet, c = t.col, n = sh.getMaxRows() - 1;
   sh.getRange(2, c['狀態'] + 1, n, 1).setDataValidation(listRule_(EXP_STATUS));
   sh.getRange(2, c['日期'] + 1, n, 1).setNumberFormat('yyyy/mm/dd');
-  const kit = SpreadsheetApp.getActive().getSheetByName('實驗套組');
-  if (kit) {
-    sh.getRange(2, c['實驗名稱'] + 1, n, 1).setDataValidation(SpreadsheetApp.newDataValidation()
-      .requireValueInRange(kit.getRange('A2:A'), true).setAllowInvalid(true).build());
-  }
+  // 實驗名稱可以自由填（社團、考試、多元選修…也放這欄），不設下拉選單；舊版設過的清掉
+  sh.getRange(2, c['實驗名稱'] + 1, n, 1).clearDataValidations();
   const st = getSettings_();
   const rooms = st.lists['上課教室'] || st.lists['教室'] || [];
   if (rooms.length) sh.getRange(2, c['教室'] + 1, n, 1).setDataValidation(
