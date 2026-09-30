@@ -94,8 +94,32 @@ function periodShort_(name) {
   return /午/.test(name) ? '午' : (String(name).replace(/[^0-9]/g, '') || String(name));
 }
 
+/**
+ * 節次儲存格 → 文字。「3-4」「1-7」打進試算表會被當成日期（3月4日、1月7日），讀到日期時轉回「3-4」。
+ */
+function periodVal_(v) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz_(), 'M-d');
+  return String(v == null ? '' : v).trim();
+}
+
+/** 把某欄（節次）設成純文字，已經被變成日期的改回「3-4」。col1＝第幾欄（從 1 起）。 */
+function fixPeriodCol_(sh, col1) {
+  const n = sh.getMaxRows() - 1;
+  if (n < 1 || col1 < 1) return;
+  const rg = sh.getRange(2, col1, n, 1);
+  const vals = rg.getValues();
+  let bad = false;
+  const out = vals.map(function (r) {
+    if (r[0] instanceof Date) { bad = true; return [periodVal_(r[0])]; }
+    return [r[0] === '' || r[0] === null ? '' : String(r[0])];
+  });
+  rg.setNumberFormat('@');
+  if (bad) rg.setValues(out);
+}
+
 /** 「3-4」「午」「1,2」「第3節」→ 節次索引（依設定的節次順序）。範圍中間跨過中午時不含中午。 */
 function parsePeriods_(str, periods) {
+  str = periodVal_(str);
   const shorts = periods.map(function (p) { return p.short; });
   const idx = function (tok) {
     tok = String(tok).trim();
@@ -186,7 +210,7 @@ function bookings_(fromKey, toKey, cfg) {
     if (!k || k < fromKey || k > toKey || st === '取消') return;
     out.push({
       row: i + 2, date: k, lab: String(r[c['教室']]).trim(), pis: parsePeriods_(r[c['節次']], cfg.periods),
-      periodText: String(r[c['節次']]), type: String(r[c['用途類型']] || '').trim() || '實驗課',
+      periodText: periodVal_(r[c['節次']]), type: String(r[c['用途類型']] || '').trim() || '實驗課',
       content: String(r[c['實驗名稱']]).trim(), cls: classLabel_(r[c['班級']], cfg.classNames), teacher: String(r[c['教師']]).trim(),
       groups: r[c['組數']], status: st, note: String(r[c['備註']]).trim(),
     });
@@ -368,6 +392,7 @@ function saveBooking(p) {
   if (conflicts.length && !p.force) return { conflicts: conflicts.filter(function (x, i, a) { return a.indexOf(x) === i; }) };
 
   const t = expTable_();
+  fixPeriodCol_(t.sheet, t.col['節次'] + 1);
   const prep = PREP_TYPES.indexOf(p.type) >= 0;
   rows.forEach(function (r) {
     appendRow_(t, { '日期': dateValue_(r.date), '節次': r.text, '班級': r.cls, '教師': p.teacher, '教室': p.lab,

@@ -19,6 +19,7 @@ function setupTodoSheet_() {
   const sh = t.sheet, c = t.col, n = sh.getMaxRows() - 1;
   sh.getRange(2, c['狀態'] + 1, n, 1).setDataValidation(listRule_(TODO_STATUS));
   sh.getRange(2, c['需要日期'] + 1, n, 1).setNumberFormat('yyyy/mm/dd');
+  if (typeof fixPeriodCol_ === 'function') fixPeriodCol_(sh, c['節次'] + 1);   // 「3-4」不要變成日期
   sh.hideColumns(c['ID'] + 1);
   const S = '$' + colLetter_(c['狀態'] + 1), D = '$' + colLetter_(c['需要日期'] + 1);
   const all = sh.getRange(2, 1, n, sh.getLastColumn());
@@ -53,6 +54,7 @@ function todoData() {
   const items = pickerItems_().filter(function (x) { return x.status !== '已淘汰'; });
   items.forEach(function (x) { stock[x.code] = x; });
   const list = [];
+  const buy = todoBuyMap_();
   t.rows.forEach(function (r) {
     const id = String(r[c['ID']]).trim();
     const st = String(r[c['狀態']]).trim() || '待準備';
@@ -62,12 +64,13 @@ function todoData() {
     const code = String(r[c['編號']]).trim(), s = stock[code];
     const need = Number(r[c['數量']]);
     list.push({
-      id: id, date: d, roc: d ? rocText_(d) : '', wd: d ? weekdayOf_(d) : '', period: String(r[c['節次']]).trim(),
+      id: id, date: d, roc: d ? rocText_(d) : '', wd: d ? weekdayOf_(d) : '', period: periodVal_(r[c['節次']]),
       lab: String(r[c['實驗室']]).trim(), cls: classLabel_(r[c['班級']], cfg.classNames), teacher: String(r[c['教師']]).trim(),
       what: String(r[c['事項']]).trim(), qty: String(r[c['數量']]).trim(), unit: String(r[c['單位']]).trim(), code: code,
       status: st, note: String(r[c['備註']]).trim(),
       place: s ? [s.room, s.cab, s.pos].filter(String).join(' ') : '',
       have: s ? (s.note || s.qty) : '', short: !!(s && need && isNumber_(s.qty) && Number(s.qty) < need),
+      buy: buy[id] || '',
     });
   });
   list.sort(function (a, b) {
@@ -88,9 +91,11 @@ function todoAdd(p) {
   lock.waitLock(20000);
   try {
     const t = todoTable_();
+    fixPeriodCol_(t.sheet, t.col['節次'] + 1);
     const stamp = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy-MM-dd HH:mm');
     const base = Date.now().toString(36);
     list.forEach(function (x, i) {
+      if (x.buy) todoPurchase_(Object.assign({ id: 'T' + base + i, what: String(x.what).trim(), qty: x.qty, unit: x.unit, code: x.code }, p));
       appendRow_(t, { 'ID': 'T' + base + i, '需要日期': p.date ? dateValue_(p.date) : '', '節次': p.period || '', '實驗室': p.lab || '',
         '班級': p.cls || '', '教師': p.teacher || '', '事項': String(x.what).trim(), '數量': isNumber_(x.qty) ? Number(x.qty) : (x.qty || ''),
         '單位': x.unit || '', '編號': x.code || '', '狀態': '待準備', '備註': p.note || '', '登錄時間': stamp, '完成時間': '' });
@@ -98,8 +103,54 @@ function todoAdd(p) {
   } finally {
     lock.releaseLock();
   }
-  return '已新增 ' + list.length + ' 項準備事項' + (p.date ? '（' + rocText_(p.date) + '（' + weekdayOf_(dateKey_(p.date)) + '）要用）' : '') + '：\n' +
+  const nb = list.filter(function (x) { return x.buy; }).length;
+  return '已新增 ' + list.length + ' 項準備事項' + (nb ? '（其中 ' + nb + ' 項也加進請購清單）' : '') + (p.date ? '（' + rocText_(p.date) + '（' + weekdayOf_(dateKey_(p.date)) + '）要用）' : '') + '：\n' +
     list.map(function (x) { return '・' + x.what + (x.qty ? ' × ' + x.qty + (x.unit || '') : ''); }).join('\n');
+}
+
+// ---------------------------------------------------------------- 準備事項 ↔ 請購清單
+
+/** 要先買的東西：在「請購清單」加一列，備註寫「準備事項 T…」連起來。x = {id, what, qty, unit, code, date, lab, period, cls, teacher} */
+function todoPurchase_(x) {
+  if (typeof setupPurchaseSheet_ !== 'function') throw new Error('需要「09_請購借用」才能加入請購清單。');
+  const t = setupPurchaseSheet_();
+  const use = ['準備事項', x.date ? rocText_(x.date) : '', x.lab, x.period ? perText_(x.period) : '', x.cls].filter(String).join(' ');
+  appendRow_(t, { '登記日期': dateValue_(today_()), '需求來源': x.teacher ? x.teacher + '老師' : '準備事項', '品名': x.what, '規格': '',
+    '數量': isNumber_(x.qty) ? Number(x.qty) : '', '單位': x.unit || '', '用途／課程': use, '需要日期': x.date ? dateValue_(x.date) : '',
+    '對應品項編號': x.code || '', '狀態': '待處理', '備註': '準備事項 ' + x.id });
+}
+
+function perText_(p) { p = String(p).trim(); return p === '午' ? '中午' : '第' + p + '節'; }
+
+/** 準備事項 ID → 請購狀態（待處理／已請購／已到貨／取消） */
+function todoBuyMap_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(typeof REQ_SHEET === 'string' ? REQ_SHEET : '請購清單');
+  if (!sh || sh.getLastRow() < 2) return {};
+  const t = getTable_(sh.getName()), c = t.col, out = {};
+  if (!('備註' in c) || !('狀態' in c)) return out;
+  t.rows.forEach(function (r) {
+    const m = String(r[c['備註']]).match(/準備事項 (T\w+)/);
+    if (m) out[m[1]] = String(r[c['狀態']]).trim() || '待處理';
+  });
+  return out;
+}
+
+/** 已經登記的準備事項，之後才發現要先買：加進請購清單 */
+function todoToPurchase(id) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    if (todoBuyMap_()[id]) throw new Error('這一項已經在請購清單裡了。');
+    const t = todoTable_(), c = t.col;
+    const r = t.rows.filter(function (x) { return String(x[c['ID']]).trim() === id; })[0];
+    if (!r) throw new Error('找不到這筆準備事項，請重新整理。');
+    todoPurchase_({ id: id, what: String(r[c['事項']]).trim(), qty: r[c['數量']], unit: String(r[c['單位']]), code: String(r[c['編號']]).trim(),
+      date: dateKey_(r[c['需要日期']]), lab: String(r[c['實驗室']]).trim(), period: periodVal_(r[c['節次']]), cls: String(r[c['班級']]).trim(),
+      teacher: String(r[c['教師']]).trim() });
+    return '已加入請購清單：' + String(r[c['事項']]).trim();
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** 改狀態：ids 陣列，status＝已準備／已歸還／待準備／取消 */
@@ -167,7 +218,7 @@ function todoJs_() {
       '.td-f{background:#f8f9fa;border:1px solid #dadce0;border-radius:10px;padding:10px 12px;margin-bottom:12px}.td-f label{display:block;font-size:13px;color:#5f6368;margin:8px 0 2px}' +
       '.td-f input,.td-f select{width:100%;font-size:15px;padding:7px;border:1px solid #c9d1d9;border-radius:6px;box-sizing:border-box;background:#fff}' +
       '.td-g{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.td-row{display:grid;grid-template-columns:1fr 70px 60px 30px;gap:6px;margin-top:6px;position:relative}' +
-      '.td-row .x{padding:0;border:none;background:none;font-size:18px;color:#999;cursor:pointer}.td-sug{position:absolute;top:38px;left:0;right:0;z-index:5;background:#fff;border:1px solid #dadce0;border-radius:6px;max-height:180px;overflow:auto;box-shadow:0 2px 6px rgba(0,0,0,.15)}' +
+      '.td-buy{color:#b06000;font-weight:600}.td-row .x{padding:0;border:none;background:none;font-size:18px;color:#999;cursor:pointer}.td-sug{position:absolute;top:38px;left:0;right:0;z-index:5;background:#fff;border:1px solid #dadce0;border-radius:6px;max-height:180px;overflow:auto;box-shadow:0 2px 6px rgba(0,0,0,.15)}' +
       '.td-sug div{padding:7px 9px;border-bottom:1px solid #f1f3f4;cursor:pointer;font-size:14px}.td-sug div:hover{background:#e8f0fe}.td-sug small{color:#5f6368}' +
       '.td-info{font-size:12px;color:#5f6368;grid-column:1/5}.td-msg{margin-top:8px;font-size:14px;white-space:pre-line}.td-msg.ok{color:#188038}.td-msg.err{color:#d93025}' +
       '@media print{.td-bar,.td-f,.td-a{display:none}}';
@@ -212,8 +263,10 @@ function todoJs_() {
             (where ? '<div class="td-s">' + esc(where) + '</div>' : '') +
             (x.place || x.have ? '<div class="td-s">📍 ' + esc(x.place || '—') + (x.have !== '' ? '　庫存 ' + esc(x.have) + ' ' + esc(x.unit) : '') +
               (x.short ? '　<span class="td-short">⚠ 可能不夠</span>' : '') + '</div>' : '') +
-            (x.note ? '<div class="td-s">📝 ' + esc(x.note) + '</div>' : '') + '</div>' +
-            '<div class="td-a">' + (x.status === '已準備' ? '<button data-r="已歸還" data-id="' + esc(x.id) + '">已歸還</button>' : '') +
+            (x.note ? '<div class="td-s">📝 ' + esc(x.note) + '</div>' : '') +
+            (x.buy ? '<div class="td-s"><span class="td-buy">🛒 請購：' + esc(x.buy) + '</span></div>' : '') + '</div>' +
+            '<div class="td-a">' + (x.status === '待準備' && !x.buy ? '<button data-r="請購" data-id="' + esc(x.id) + '" title="加入請購清單">🛒 要先買</button>' : '') +
+            (x.status === '已準備' ? '<button data-r="已歸還" data-id="' + esc(x.id) + '">已歸還</button>' : '') +
             (x.status === '待準備' ? '<button data-r="取消" data-id="' + esc(x.id) + '">取消</button>' : '') +
             (x.status !== '待準備' ? '<span style="font-size:12px;color:#5f6368">' + esc(x.status) + '</span>' : '') + '</div></div>';
         });
@@ -235,6 +288,12 @@ function todoJs_() {
             const s = b.getAttribute('data-r');
             // 取消要按兩次（避免誤按；不用 confirm，瀏覽器會跳出一長串網址）
             if (s === '取消' && b.textContent !== '確定取消？') { b.textContent = '確定取消？'; b.style.color = '#d93025'; return; }
+            if (s === '請購') {
+              b.disabled = true; b.textContent = '加入中…';
+              google.script.run.withSuccessHandler(function () { load(); }).withFailureHandler(function (e) { alert(e.message || e); load(); })
+                .todoToPurchase(b.getAttribute('data-id'));
+              return;
+            }
             set([b.getAttribute('data-id')], s);
           };
         });
@@ -263,7 +322,8 @@ function todoJs_() {
             '<input data-i="' + i + '" class="tdQty" placeholder="數量" inputmode="decimal" value="' + esc(r.qty || '') + '">' +
             '<input data-i="' + i + '" class="tdUnit" placeholder="單位" value="' + esc(r.unit || '') + '">' +
             '<button class="x" data-i="' + i + '" title="刪掉這一行">✕</button>' +
-            (r.info ? '<div class="td-info">' + esc(r.info) + '</div>' : '') + '</div>';
+            '<div class="td-info"><label style="display:inline-flex;gap:4px;align-items:center;margin:0;color:#b06000"><input type="checkbox" class="tdBuy" data-i="' + i + '"' +
+            (r.buy ? ' checked' : '') + ' style="width:auto">🛒 要先買（也加進請購清單）</label>' + (r.info ? '　' + esc(r.info) : '') + '</div></div>';
         });
         h += '</div><button id="tdMore" style="margin-top:6px">＋ 再一樣</button>' +
           '<label>備註（例：便條內容、老師要自己來拿）</label><input id="tdNote" value="' + esc(f.note || '') + '">' +
@@ -278,6 +338,7 @@ function todoJs_() {
         box.querySelectorAll('.tdWhat').forEach(function (e) { rows[+e.getAttribute('data-i')].what = e.value; });
         box.querySelectorAll('.tdQty').forEach(function (e) { rows[+e.getAttribute('data-i')].qty = e.value; });
         box.querySelectorAll('.tdUnit').forEach(function (e) { rows[+e.getAttribute('data-i')].unit = e.value; });
+        box.querySelectorAll('.tdBuy').forEach(function (e) { rows[+e.getAttribute('data-i')].buy = e.checked; });
       }
       function fetchLessons() {
         const d = document.getElementById('tdDate'); if (!d || !d.value) return;
@@ -345,7 +406,7 @@ function todoJs_() {
           }).todoData();
         }).withFailureHandler(function (e) { b.disabled = false; b.textContent = '儲存'; msg.className = 'td-msg err'; msg.textContent = e.message || e; })
           .todoAdd({ date: f.date, lab: f.lab, period: f.period, cls: f.cls, teacher: f.teacher, note: f.note,
-            items: items.map(function (r) { return { what: r.what, qty: r.qty, unit: r.unit, code: r.code || '' }; }) });
+            items: items.map(function (r) { return { what: r.what, qty: r.qty, unit: r.unit, code: r.code || '', buy: !!r.buy }; }) });
       }
       load();
     };
@@ -380,7 +441,7 @@ function page_todo(p) {
     return d ? d >= from && d <= to : st === '待準備';
   }).sort(function (a, b) {
     const x = dateKey_(a[c['需要日期']]) || '9999', y = dateKey_(b[c['需要日期']]) || '9999';
-    return x < y ? -1 : x > y ? 1 : naturalCompare_(a[c['實驗室']], b[c['實驗室']]) || naturalCompare_(a[c['節次']], b[c['節次']]);
+    return x < y ? -1 : x > y ? 1 : naturalCompare_(a[c['實驗室']], b[c['實驗室']]) || naturalCompare_(periodVal_(a[c['節次']]), periodVal_(b[c['節次']]));
   });
   let body = '', last = null;
   list.forEach(function (r) {
@@ -393,7 +454,7 @@ function page_todo(p) {
       last = head;
     }
     const s = stock[String(r[c['編號']]).trim()];
-    const per = String(r[c['節次']]).trim();
+    const per = periodVal_(r[c['節次']]);
     const done = String(r[c['狀態']]).trim() === '已準備';
     body += '<tr><td class="box">' + (done ? '☑' : '☐') + '</td><td class="box">☐</td><td>' + esc_(r[c['事項']]) +
       (String(r[c['備註']]).trim() ? '<div class="nt">' + esc_(r[c['備註']]) + '</div>' : '') + '</td><td>' +

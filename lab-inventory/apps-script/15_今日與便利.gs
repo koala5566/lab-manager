@@ -11,7 +11,7 @@
 
 /** 一列的辨識碼：日期｜實驗室｜節次｜班級（班級用班名） */
 function lessonKey_(r, c, cfg) {
-  return [dateKey_(r[c['日期']]), String(r[c['教室']]).trim(), String(r[c['節次']]).trim(), classLabel_(r[c['班級']], cfg.classNames)].join('|');
+  return [dateKey_(r[c['日期']]), String(r[c['教室']]).trim(), periodVal_(r[c['節次']]), classLabel_(r[c['班級']], cfg.classNames)].join('|');
 }
 
 /** 依列號找，列號對不上（中間有刪列）就用辨識碼找。回傳列號（從 2 起）或 -1 */
@@ -135,7 +135,7 @@ function nameRows(fromKey, toKey) {
     const mon = mondayOf_(d);
     out.push({ row: i + 2, key: lessonKey_(r, c, cfg), date: d, roc: rocText_(d), wd: weekdayOf_(d),
       week: rocText_(mon).slice(4) + '（一）～' + rocText_(addDays_(mon, 4)).slice(4) + '（五）',
-      period: String(r[c['節次']]).trim(), lab: String(r[c['教室']]).trim(), cls: classLabel_(r[c['班級']], cfg.classNames),
+      period: periodVal_(r[c['節次']]), lab: String(r[c['教室']]).trim(), cls: classLabel_(r[c['班級']], cfg.classNames),
       teacher: String(r[c['教師']]).trim(), name: String(r[c['實驗名稱']]).trim() });
   });
   out.sort(function (a, b) {

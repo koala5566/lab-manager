@@ -18,6 +18,7 @@ function setupExperimentSheet_() {
   const sh = t.sheet, c = t.col, n = sh.getMaxRows() - 1;
   sh.getRange(2, c['狀態'] + 1, n, 1).setDataValidation(listRule_(EXP_STATUS));
   sh.getRange(2, c['日期'] + 1, n, 1).setNumberFormat('yyyy/mm/dd');
+  if (typeof fixPeriodCol_ === 'function') fixPeriodCol_(sh, c['節次'] + 1);   // 「3-4」不要變成日期
   // 實驗名稱可以自由填（社團、考試、多元選修…也放這欄），不設下拉選單；舊版設過的清掉
   sh.getRange(2, c['實驗名稱'] + 1, n, 1).clearDataValidations();
   const st = getSettings_();
@@ -127,6 +128,9 @@ function experimentDialog() {
   showDialog_(html, data, '🧪 新增實驗排程', 520);
 }
 
+/** 節次文字（有 12_實驗室使用 時會把被變成日期的轉回來） */
+function pv_(v) { return typeof periodVal_ === 'function' ? periodVal_(v) : String(v == null ? '' : v).trim(); }
+
 function addExperiment(f) {
   const t = setupExperimentSheet_();
   appendRow_(t, { '日期': dateValue_(f['日期']), '節次': f['節次'], '班級': f['班級'], '教師': f['教師'], '教室': f['教室'],
@@ -206,11 +210,11 @@ function page_prep(p) {
         (!type || type === '實驗課' || type === '補做實驗');
     }).sort(function (a, b) {
       return dateKey_(a[c['日期']]) < dateKey_(b[c['日期']]) ? -1 : dateKey_(a[c['日期']]) > dateKey_(b[c['日期']]) ? 1 :
-        naturalCompare_(a[c['節次']], b[c['節次']]);
+        naturalCompare_(pv_(a[c['節次']]), pv_(b[c['節次']]));
     }).forEach(function (r) {
       const g = Number(r[c['組數']]) || 0;
       blocks.push({
-        head: '<b>' + esc_(rocText_(r[c['日期']])) + '</b>　' + esc_(r[c['節次']] ? '第 ' + r[c['節次']] + ' 節　' : '') +
+        head: '<b>' + esc_(rocText_(r[c['日期']])) + '</b>　' + esc_(pv_(r[c['節次']]) ? '第 ' + pv_(r[c['節次']]) + ' 節　' : '') +
           esc_(r[c['班級']] || '') + '　' + esc_(r[c['教師']] || '') + '　' + esc_(r[c['教室']] || '') +
           '<br><span style="font-size:13pt"><b>' + esc_(r[c['實驗名稱']]) + '</b></span>' + (g ? '　' + g + ' 組' : '') +
           (r[c['備註']] ? '　<small>' + esc_(r[c['備註']]) + '</small>' : ''),

@@ -221,7 +221,7 @@ function importPlan_(o) {
   // 保留已經填的實驗名稱、組數、狀態、備註（同實驗室、日期、節次、班級）
   const kept = {};
   old.forEach(function (r) {
-    const key = [r[c['教室']], dateKey_(r[c['日期']]), String(r[c['節次']]).trim(), String(r[c['班級']]).trim()].join('|');
+    const key = [r[c['教室']], dateKey_(r[c['日期']]), periodVal_(r[c['節次']]), String(r[c['班級']]).trim()].join('|');
     kept[key] = { name: String(r[c['實驗名稱']]).trim(), groups: r[c['組數']], status: String(r[c['狀態']]).trim(), note: String(r[c['備註']]).trim() };
   });
   rows.forEach(function (x) {
@@ -311,9 +311,10 @@ function importApply(o) {
     const all = p.keep.concat(fresh);
     all.sort(function (a, b) {
       const x = dateKey_(a[c['日期']]) || '9999', y = dateKey_(b[c['日期']]) || '9999';
-      return x < y ? -1 : x > y ? 1 : naturalCompare_(a[c['教室']], b[c['教室']]) || naturalCompare_(a[c['節次']], b[c['節次']]);
+      return x < y ? -1 : x > y ? 1 : naturalCompare_(a[c['教室']], b[c['教室']]) || naturalCompare_(periodVal_(a[c['節次']]), periodVal_(b[c['節次']]));
     });
     const sh = t.sheet;
+    fixPeriodCol_(sh, c['節次'] + 1);
     if (all.length + 1 > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), all.length + 51 - sh.getMaxRows());
     sh.getRange(2, 1, sh.getMaxRows() - 1, w).clearContent();
     if (all.length) sh.getRange(2, 1, all.length, w).setValues(all);

@@ -218,8 +218,10 @@ function todoRow(t, opt) {
   return '<div class="it' + (t.status !== '待準備' ? ' done' : '') + '"><button class="ck' + (t.status !== '待準備' ? ' on' : '') + '" data-ck="' + esc(t.id) + '">' +
     (t.status !== '待準備' ? ic('check', 's') : '') + '</button><div style="min-width:0;flex:1"><div class="t">' + esc(t.what) + (t.qty ? ' × ' + esc(t.qty) + ' ' + esc(t.unit) : '') + '</div>' +
     '<div class="s">' + where + (t.place || t.have !== '' ? '<br>' + ic('pin', 's') + ' ' + esc(t.place || '—') + (t.have !== '' && t.have != null ? '　庫存 ' + esc(t.have) + ' ' + esc(t.unit) : '') : '') +
-    (t.short ? '　<span class="late">⚠ 可能不夠</span>' : '') + (t.note ? '<br>📝 ' + esc(t.note) : '') + '</div></div>' +
-    (opt.actions === false ? '' : t.status === '待準備' ? '<button class="x" data-cancel="' + esc(t.id) + '">取消</button>' :
+    (t.short ? '　<span class="late">⚠ 可能不夠</span>' : '') + (t.note ? '<br>📝 ' + esc(t.note) : '') +
+    (t.buy ? '<br><span class="buyb' + (t.buy === '已到貨' ? ' ok' : '') + '">🛒 請購：' + esc(t.buy) + '</span>' : '') + '</div></div>' +
+    (opt.actions === false ? '' : t.status === '待準備' ? '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">' +
+      (t.buy ? '' : '<button class="x" data-buy="' + esc(t.id) + '">🛒 要先買</button>') + '<button class="x" data-cancel="' + esc(t.id) + '">取消</button></div>' :
       t.status === '已準備' ? '<button class="x" data-back="' + esc(t.id) + '">已歸還</button>' : '<span class="x">' + esc(t.status) + '</span>') + '</div>';
 }
 function bindTodoRows(el) {
@@ -236,6 +238,13 @@ function bindTodoRows(el) {
       if (!b.classList.contains('cf')) { b.classList.add('cf'); b.textContent = '確定取消？'; setTimeout(function () { b.classList.remove('cf'); b.textContent = '取消'; }, 3000); return; }
       var t = S.D.todos.filter(function (x) { return x.id === b.getAttribute('data-cancel'); })[0];
       if (t) setTodo(t, '取消', '已取消：' + t.what);
+    };
+  });
+  $$('[data-buy]', el).forEach(function (b) {
+    b.onclick = function () {
+      b.disabled = true; b.textContent = '加入中…';
+      call('todoToPurchase', b.getAttribute('data-buy')).then(function (m) { toast(m); return reloadTodos(); })
+        .catch(function (e) { toast(e, true); b.disabled = false; b.textContent = '🛒 要先買'; });
     };
   });
   $$('[data-back]', el).forEach(function (b) {
@@ -393,7 +402,7 @@ function lessonHtml(b) {
   }
   h += '<div class="blk"><b>準備事項</b>' + (ts.length ? ts.map(function (t) {
     return '<div class="mini' + (t.status !== '待準備' ? ' done' : '') + '"><button class="ck' + (t.status !== '待準備' ? ' on' : '') + '" data-ck="' + esc(t.id) + '">' + (t.status !== '待準備' ? ic('check', 's') : '') + '</button><span>' +
-      esc(t.what + (t.qty ? ' × ' + t.qty + ' ' + t.unit : '')) + '</span></div>';
+      esc(t.what + (t.qty ? ' × ' + t.qty + ' ' + t.unit : '')) + '</span>' + (t.buy ? '<span class="buyb">🛒 ' + esc(t.buy) + '</span>' : '') + '</div>';
   }).join('') : '<span class="muted">還沒有</span>') + '</div>' +
     '<div class="btns2"><button class="btn g s" id="lAdd">' + ic('plus', 's') + '加準備事項</button>' +
     (S.D.url && b.content && isPrep(b) ? '<button class="btn p s" id="lPrep">' + ic('print', 's') + '器材準備單</button>' : '<span></span>') + '</div>';
@@ -591,6 +600,7 @@ function openAdd(pre) {
     $$('.aWhat', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].what = e.value; });
     $$('.aQty', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].qty = e.value; });
     $$('.aUnit', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].unit = e.value; });
+    $$('.aBuy', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].buy = e.checked; });
   }
   function isSel(l) { return l.lab === st.lab && String(l.periodText).trim() === String(st.period).trim() && l.cls === st.cls; }
   function draw() {
@@ -608,7 +618,8 @@ function openAdd(pre) {
       st.rows.map(function (r, i) {
         return '<div class="row3"><input class="inp aWhat" data-i="' + i + '" placeholder="例：燒杯、冰塊、報紙" value="' + esc(r.what || '') + '" autocomplete="off">' +
           '<input class="inp aQty" data-i="' + i + '" inputmode="decimal" placeholder="數量" value="' + esc(r.qty || '') + '"><input class="inp aUnit" data-i="' + i + '" placeholder="單位" value="' + esc(r.unit || '') + '">' +
-          '<button class="muted" data-rm="' + i + '">' + ic('x') + '</button>' + (r.info ? '<div class="info">' + esc(r.info) + '</div>' : '') + '</div>';
+          '<button class="muted" data-rm="' + i + '">' + ic('x') + '</button><div class="info"><label class="buyck"><input type="checkbox" class="aBuy" data-i="' + i + '"' + (r.buy ? ' checked' : '') +
+          '>🛒 要先買（也加進請購清單）</label>' + (r.info ? '　' + esc(r.info) : '') + '</div></div>';
       }).join('') +
       '<button class="btn g s" id="aMore" style="width:100%;margin-top:10px;color:var(--pri)">' + ic('plus', 's') + '再加一樣</button>' +
       '<label class="lbl">備註</label><input class="inp" id="a_note" placeholder="例：便條內容、老師自己來拿" value="' + esc(st.note) + '">' +
@@ -664,9 +675,10 @@ function openAdd(pre) {
     if (!items.length) { toast('請至少填一樣要準備的東西', true); return; }
     var b = $('#aSave', sh); b.disabled = true; b.textContent = '儲存中…';
     call('todoAdd', { date: st.date, lab: st.lab, period: st.period, cls: st.cls, teacher: st.teacher, note: st.note,
-      items: items.map(function (r) { return { what: r.what, qty: r.qty, unit: r.unit, code: r.code || '' }; }) })
+      items: items.map(function (r) { return { what: r.what, qty: r.qty, unit: r.unit, code: r.code || '', buy: !!r.buy }; }) })
       .then(function () {
-        closeSheet(); toast('已新增 ' + items.length + ' 項準備事項');
+        var nb = items.filter(function (r) { return r.buy; }).length;
+        closeSheet(); toast('已新增 ' + items.length + ' 項準備事項' + (nb ? '，' + nb + ' 項加進請購清單' : ''));
         return reloadTodos();
       }).catch(function (e) { b.disabled = false; b.textContent = '儲存'; toast(e, true); });
   }
