@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --line:#E3E8EF; --text:#1B2433; --sub:#5B6576; --mute:#8A94A6;
+  --pri:#1F5EDB; --pri-weak:#E8EFFD; --ok:#1E8E4E; --ok-weak:#E6F4EC; --warn:#D97706; --warn-weak:#FEF3E2; --bad:#D6363B; --bad-weak:#FDECEC;
+  --t-lab:#DCE7FD; --t-club:#D9F2E3; --t-exam:#FFE7C7; --t-elect:#FBE1F1; --t-off:#E6E8EC; --t-proj:#FBDCD9;
+  --r:14px; --shadow:0 1px 2px rgba(16,24,40,.06),0 2px 8px rgba(16,24,40,.06);
+}
+.dark{ --bg:#0F141C; --surface:#18202B; --line:#263142; --text:#E6EAF1; --sub:#A3AEC2; --mute:#7C879B; --pri:#6D9BFF; --pri-weak:#1D2B47;
+  --ok-weak:#16301F; --warn-weak:#3A2A12; --bad-weak:#3A1A1C; --t-lab:#23355A; --t-club:#1E3A2A; --t-exam:#4A3718; --t-elect:#47253A; --t-off:#2A3240; --t-proj:#4A2826; }
+*{box-sizing:border-box} html,body{margin:0}
+body{font-family:"PingFang TC","Noto Sans TC","WenQuanYi Zen Hei",sans-serif;background:var(--bg);color:var(--text);font-size:15px;-webkit-font-smoothing:antialiased}
+svg.i{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.screen{display:none}.screen.on{display:block}
+/* ---------- phone ---------- */
+.ph{min-height:100vh;padding-bottom:86px}
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);padding:14px 18px 10px}
+.top .row{display:flex;align-items:center;gap:10px}.top h1{font-size:26px;margin:0;font-weight:800;letter-spacing:.5px}
+.top .date{color:var(--sub);font-size:14px;margin-top:2px}.icbtn{width:40px;height:40px;border-radius:12px;background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow);color:var(--sub)}
+.sp{flex:1}
+.chips{display:flex;gap:8px;padding:4px 18px 6px;overflow:auto}.chip{flex:none;display:flex;align-items:center;gap:6px;background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13.5px;box-shadow:var(--shadow);color:var(--sub)}
+.chip b{color:var(--text);font-size:15px}.chip.warn b{color:var(--warn)}
+.sec{padding:8px 18px}.sec h2{font-size:15px;color:var(--sub);font-weight:700;margin:14px 2px 8px;display:flex;align-items:center;gap:8px}
+.sec h2 .more{margin-left:auto;font-size:13px;color:var(--pri);font-weight:600}
+.now{background:linear-gradient(135deg,#1F5EDB,#3B82F6);color:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 6px 18px rgba(31,94,219,.28)}
+.now .h{display:flex;align-items:center;gap:8px;font-size:13px;opacity:.9}.now .dot{width:8px;height:8px;border-radius:50%;background:#7CFFB2;box-shadow:0 0 0 4px rgba(124,255,178,.25)}
+.now .big{font-size:20px;font-weight:800;margin:6px 0 10px}.now .labs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.now .lab{background:rgba(255,255,255,.14);border-radius:12px;padding:9px 10px}.now .lab small{opacity:.8;font-size:12px;display:block}.now .lab b{font-size:15px}
+.tl{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.tl .it{display:flex;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);align-items:center}.tl .it:last-child{border:none}
+.tl .p{width:34px;height:34px;border-radius:10px;background:var(--pri-weak);color:var(--pri);display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}
+.tl .it.past{opacity:.5}.tl .it.cur .p{background:var(--pri);color:#fff}
+.tl .t{font-weight:700}.tl .s{color:var(--sub);font-size:13px;margin-top:2px}.tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:6px;margin-right:6px;color:var(--text);font-weight:600}
+.badge{margin-left:auto;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-weak);padding:3px 8px;border-radius:8px;white-space:nowrap}
+.todo{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:4px 0}
+.todo .it{display:flex;gap:12px;padding:10px 14px;align-items:flex-start}.ck{width:24px;height:24px;border-radius:8px;border:2px solid #C3CBD8;flex:none;margin-top:1px;display:grid;place-items:center}
+.ck.on{background:var(--ok);border-color:var(--ok);color:#fff}.todo .t{font-weight:700}.todo .s{font-size:13px;color:var(--sub);margin-top:2px}.late{color:var(--bad);font-weight:700}
+.todo .it.done .t{text-decoration:line-through;color:var(--mute)}
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px 22px;z-index:9}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;color:var(--mute);text-decoration:none;padding:5px 0;border-radius:12px;position:relative}
+.nav a.on{color:var(--pri);font-weight:700}.nav a.on svg{stroke-width:2.3}.nav .n{position:absolute;top:0;right:22%;background:var(--bad);color:#fff;font-size:10px;border-radius:9px;padding:0 5px;font-weight:700}
+.fab{position:fixed;right:18px;bottom:96px;width:56px;height:56px;border-radius:18px;background:var(--pri);color:#fff;display:grid;place-items:center;box-shadow:0 8px 20px rgba(31,94,219,.35);z-index:8}.fab svg{width:26px;height:26px}
+/* count */
+.prog{background:var(--surface);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}.prog .l{display:flex;justify-content:space-between;font-size:13.5px;color:var(--sub)}
+.bar{height:8px;background:var(--line);border-radius:6px;margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok);border-radius:6px}
+.seg{display:flex;background:var(--surface);border-radius:12px;padding:3px;box-shadow:var(--shadow);margin-top:10px}.seg a{flex:1;text-align:center;padding:7px;border-radius:9px;font-size:13.5px;color:var(--sub)}.seg a.on{background:var(--pri-weak);color:var(--pri);font-weight:700}
+.cur{background:var(--surface);border-radius:20px;box-shadow:0 4px 20px rgba(16,24,40,.10);padding:16px;border:2px solid var(--pri)}
+.cur .loc{font-size:12.5px;color:var(--sub);display:flex;gap:6px;align-items:center}.cur .nm{font-size:22px;font-weight:800;margin:6px 0 2px}.cur .fx{color:var(--sub);font-size:14px}
+.last{display:flex;gap:8px;margin:12px 0;font-size:13px}.last div{flex:1;background:var(--bg);border-radius:10px;padding:8px 10px;color:var(--sub)}.last b{display:block;color:var(--text);font-size:16px;margin-top:2px}
+.stepper{display:grid;grid-template-columns:64px 1fr 64px;gap:10px;align-items:center}.stepper .b{height:60px;border-radius:16px;background:var(--pri-weak);color:var(--pri);display:grid;place-items:center;font-size:28px;font-weight:700}
+.stepper .v{height:60px;border-radius:16px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;gap:6px}.stepper .v small{font-size:15px;color:var(--sub);font-weight:600}
+.inp{margin-top:10px;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;color:var(--mute);font-size:14px}
+.acts{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:12px}.btn{height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:15.5px}
+.btn.g{background:var(--bg);color:var(--sub)}.btn.p{background:var(--pri);color:#fff;box-shadow:0 4px 12px rgba(31,94,219,.3)}
+.nx .it{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px}.nx .it:last-child{border:none}.dt{width:10px;height:10px;border-radius:50%;flex:none}
+.nx .q{margin-left:auto;color:var(--sub);font-size:13px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#1B2433;color:#fff;border-radius:12px;padding:10px 16px;font-size:14px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:20;white-space:nowrap}
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(15,20,28,.45);z-index:15}.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 18px 26px;z-index:16}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}.sheet h3{margin:0 0 10px;font-size:18px}
+.fld{margin-top:10px}.fld label{font-size:12.5px;color:var(--sub);font-weight:600;display:block;margin-bottom:4px}.fld .box{border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.fld .box.act{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-weak)}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lesson{display:flex;gap:8px;overflow:auto;margin-top:4px}.lesson span{flex:none;border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px}.lesson span.on{border-color:var(--pri);background:var(--pri-weak);color:var(--pri);font-weight:700}
+.sug{border:1px solid var(--line);border-radius:12px;margin-top:6px;overflow:hidden}.sug div{padding:9px 12px;border-bottom:1px solid var(--line);font-size:14px}.sug div:last-child{border:none}.sug small{color:var(--sub)}
+.row3{display:grid;grid-template-columns:1fr 70px 60px;gap:8px}
+/* ---------- tablet / desktop ---------- */
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;gap:10px;align-items:center;padding:4px 8px 16px}.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#1F5EDB,#22A3C4);display:grid;place-items:center;color:#fff}
+.brand b{display:block;font-size:15px}.brand small{color:var(--sub);font-size:12px}
+.side a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;color:var(--sub);font-weight:600;font-size:14.5px;text-decoration:none}.side a.on{background:var(--pri-weak);color:var(--pri)}
+.side a .n{margin-left:auto;background:var(--bad);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px}.side .grp{font-size:11.5px;color:var(--mute);font-weight:700;margin:14px 12px 4px;letter-spacing:1px}
+.main{padding:20px 24px;overflow:hidden}.mh{display:flex;align-items:center;gap:12px;margin-bottom:14px}.mh h1{margin:0;font-size:24px}.mh .sub{color:var(--sub)}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--mute);width:280px;font-size:14px}
+.tbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.pill{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:13.5px;color:var(--sub);display:flex;align-items:center;gap:6px}
+.pill.on{background:var(--pri);color:#fff;border-color:var(--pri)}.segw{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}.segw span{padding:7px 14px;font-size:13.5px;color:var(--sub);border-right:1px solid var(--line)}.segw span:last-child{border:none}.segw span.on{background:var(--pri-weak);color:var(--pri);font-weight:700}
+.card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.split{display:grid;grid-template-columns:1fr 330px;gap:16px}
+table.wk{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}table.wk th{font-size:12.5px;color:var(--sub);font-weight:700;padding:10px 6px;border-bottom:1px solid var(--line);background:var(--surface)}
+table.wk th.today{color:var(--pri)}table.wk th.today div{background:var(--pri);color:#fff;border-radius:8px;padding:2px 0;margin-top:3px}
+table.wk td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);height:58px;padding:4px;vertical-align:top}table.wk td:last-child{border-right:none}
+table.wk td.pr{font-size:12px;color:var(--sub);text-align:center;vertical-align:middle;background:var(--surface)}table.wk td.pr b{display:block;color:var(--text);font-size:14px}
+.ev{border-radius:9px;padding:5px 7px;font-size:12px;line-height:1.3;height:100%;position:relative}.ev b{display:block;font-size:12.5px}.ev.sel{outline:2.5px solid var(--pri);outline-offset:1px}
+.ev .td{position:absolute;right:5px;top:4px;font-size:10.5px;background:var(--surface);border-radius:6px;padding:0 4px;color:var(--warn);font-weight:700}
+.det{padding:16px}.det h3{margin:4px 0 2px;font-size:20px}.det .m{color:var(--sub);font-size:13.5px;margin-top:4px;display:flex;gap:6px;align-items:center}
+.det .blk{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.det .blk>b{font-size:13px;color:var(--sub);display:block;margin-bottom:8px}
+.kit{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px dashed var(--line)}.kit:last-child{border:none}.kit .okk{color:var(--ok);font-weight:700}.kit .ng{color:var(--bad);font-weight:700}
+.mini{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:14px}
+.btns2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.btn.s{height:42px;font-size:14px}
+/* desktop dashboard */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px}.kpi{padding:14px 16px}.kpi small{color:var(--sub);font-size:13px;display:flex;align-items:center;gap:6px}
+.kpi b{display:block;font-size:30px;margin:4px 0 0;letter-spacing:.5px}.kpi span{font-size:12.5px;color:var(--mute)}
+.grid3{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}.ch{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}.ch h3{margin:0;font-size:16px}.ch .more{margin-left:auto;color:var(--pri);font-size:13px;font-weight:600}
+.labs6{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px 16px 16px}.lt{border-radius:12px;padding:11px 12px;border:1px solid var(--line)}
+.lt .n{font-size:12.5px;color:var(--sub);display:flex;justify-content:space-between}.lt b{display:block;font-size:15px;margin-top:5px}.lt span{font-size:12.5px;color:var(--sub)}
+.lt.busy{background:var(--t-lab);border-color:transparent}.lt.free b{color:var(--mute);font-weight:600}.st{font-size:11px;border-radius:6px;padding:0 6px;font-weight:700}.st.b{background:var(--pri);color:#fff}.st.f{background:var(--ok-weak);color:var(--ok)}
+.heat{padding:4px 16px 16px}.heat table{width:100%;border-collapse:separate;border-spacing:3px}.heat td{height:26px;border-radius:6px;font-size:11px;text-align:center;color:var(--sub)}.heat td.h{background:transparent;text-align:left;font-weight:700;width:62px}
+.heat td.x{background:var(--t-lab);color:var(--text);font-weight:600}.heat td.e{background:var(--bg)}.heat td.o{background:var(--t-elect);color:var(--text)}.heat td.nw{outline:2px solid var(--pri)}
+.lst .it{display:flex;gap:10px;align-items:center;padding:9px 16px;border-top:1px solid var(--line);font-size:14px}.lst .it .r{margin-left:auto;color:var(--sub);font-size:13px}
+</style></head><body>
+
+<!-- 共用圖示 -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 3v3M16 3v3"/></symbol>
+  <symbol id="todo" viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="m8 11 2.5 2.5L16 8M8 17h8"/></symbol>
+  <symbol id="count" viewBox="0 0 24 24"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M8 12h8M8 16h5"/></symbol>
+  <symbol id="grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A1.8 1.8 0 0 0 6 21h12a1.8 1.8 0 0 0 1.5-2.5L14 9V3"/><path d="M7.5 15h9"/></symbol>
+  <symbol id="box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="cart" viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H7"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></symbol>
+  <symbol id="swap" viewBox="0 0 24 24"><path d="M7 7h12l-3-3M17 17H5l3 3"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="print" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/></symbol>
+  <symbol id="left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-3.5M14.5 18.5v2"/></symbol>
+  <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+</svg>
+
+<!-- ===================== 手機：今天 ===================== -->
+<div class="screen" id="p-today"><div class="ph">
+  <div class="top"><div class="row"><div><h1>今天</h1><div class="date">115.10.01（四）　第 5 週</div></div><div class="sp"></div>
+    <div class="icbtn"><svg class="i"><use href="#search"/></svg></div><div class="icbtn"><svg class="i"><use href="#qr"/></svg></div></div></div>
+  <div class="chips"><div class="chip"><svg class="i" style="width:16px;height:16px"><use href="#flask"/></svg>今天 <b>13</b> 堂</div>
+    <div class="chip warn"><svg class="i" style="width:16px;height:16px"><use href="#todo"/></svg>待準備 <b>3</b></div>
+    <div class="chip"><svg class="i" style="width:16px;height:16px"><use href="#alert"/></svg>需補充 <b>2</b></div>
+    <div class="chip"><svg class="i" style="width:16px;height:16px"><use href="#swap"/></svg>借出中 <b>1</b></div></div>
+  <div class="sec">
+    <div class="now"><div class="h"><span class="dot"></span>現在　第 3 節　10:10–11:00</div><div class="big">2 間實驗室上課中</div>
+      <div class="labs"><div class="lab"><small>化學實驗室一</small><b>酸鹼滴定</b><small>二業　光輝老師</small></div>
+        <div class="lab"><small>化學實驗室二</small><b>沉澱反應</b><small>三愛　錦瑞老師</small></div></div></div>
+    <h2>今天的課<span class="more">看全部</span></h2>
+    <div class="tl">
+      <div class="it past"><div class="p">2</div><div><div class="t">沉澱反應</div><div class="s"><span class="tag" style="background:var(--t-lab)">化二</span>三和　錦瑞</div></div></div>
+      <div class="it cur"><div class="p">3</div><div><div class="t">酸鹼滴定</div><div class="s"><span class="tag" style="background:var(--t-lab)">化一</span>二業　光輝</div></div><span class="badge">📝 1</span></div>
+      <div class="it cur"><div class="p">3</div><div><div class="t">沉澱反應</div><div class="s"><span class="tag" style="background:var(--t-lab)">化二</span>三愛　錦瑞</div></div></div>
+      <div class="it"><div class="p">4</div><div><div class="t">酸鹼滴定</div><div class="s"><span class="tag" style="background:var(--t-lab)">化一</span>二和　光輝</div></div></div>
+      <div class="it"><div class="p">5</div><div><div class="t">沉澱反應</div><div class="s"><span class="tag" style="background:var(--t-lab)">化二</span>三誠　芳儀</div></div><span class="badge">📝 2</span></div>
+    </div>
+    <h2>待準備<span class="more">全部 3 項</span></h2>
+    <div class="todo">
+      <div class="it"><div class="ck"></div><div><div class="t">冰塊 × 1 袋</div><div class="s">今天 第5節　化二 三誠　<span class="late">今天要用</span></div></div></div>
+      <div class="it"><div class="ck"></div><div><div class="t">50mL 燒杯 × 20 個</div><div class="s"><svg class="i" style="width:13px;height:13px;vertical-align:-2px"><use href="#pin"/></svg> 化學準備室 器材區3-A　庫存 283</div></div></div>
+      <div class="it done"><div class="ck on"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg></div><div><div class="t">氯化鈉 × 2 瓶</div><div class="s">已準備 09:40</div></div></div>
+    </div>
+  </div>
+  <div class="fab"><svg class="i"><use href="#plus"/></svg></div>
+  <nav class="nav"><a class="on"><svg class="i"><use href="#home"/></svg>今天</a><a><svg class="i"><use href="#cal"/></svg>課表</a>
+    <a><svg class="i"><use href="#todo"/></svg>待辦<span class="n">3</span></a><a><svg class="i"><use href="#count"/></svg>盤點</a><a><svg class="i"><use href="#grid"/></svg>更多</a></nav>
+</div></div>
+
+<!-- ===================== 手機：盤點 ===================== -->
+<div class="screen" id="p-count"><div class="ph">
+  <div class="top"><div class="row"><div class="icbtn"><svg class="i"><use href="#left"/></svg></div><div><h1 style="font-size:21px">化學準備室 A 櫃</h1><div class="date">115-1 期末盤點</div></div><div class="sp"></div>
+    <div class="icbtn"><svg class="i"><use href="#search"/></svg></div></div></div>
+  <div class="sec" style="padding-top:0">
+    <div class="prog"><div class="l"><span>這櫃進度</span><span><b style="color:var(--text)">12</b> / 30　全部 342 / 723</span></div><div class="bar"><i style="width:40%"></i></div>
+      <div class="seg"><a>全部 30</a><a class="on">還沒盤 18</a><a>有差異 2</a></div></div>
+    <div style="height:12px"></div>
+    <div class="cur"><div class="loc"><svg class="i" style="width:15px;height:15px"><use href="#pin"/></svg>A 櫃　第 1 層　第 4 格</div>
+      <div class="nm">氯化鈉</div><div class="fx">NaCl　500g／瓶</div>
+      <div class="last"><div>上次 115.08.26<b>4 瓶</b></div><div>安全存量<b>3 瓶</b></div></div>
+      <div class="stepper"><div class="b">−</div><div class="v">4<small>瓶</small></div><div class="b">＋</div></div>
+      <div class="inp">說明（可空白，例：1 瓶剩半）</div>
+      <div class="acts"><div class="btn g"><svg class="i"><use href="#left"/></svg>上一項</div><div class="btn p">存好，下一項<svg class="i"><use href="#right"/></svg></div></div></div>
+    <h2>接下來</h2>
+    <div class="tl nx"><div class="it"><span class="dt" style="background:#C3CBD8"></span>氯化鉀 KCl<span class="q">上次 2 瓶</span></div>
+      <div class="it"><span class="dt" style="background:#C3CBD8"></span>碘化鉀 KI<span class="q">上次 1 瓶</span></div>
+      <div class="it"><span class="dt" style="background:var(--ok)"></span>硝酸鉀 KNO₃<span class="q" style="color:var(--ok)">✔ 3 瓶</span></div>
+      <div class="it"><span class="dt" style="background:var(--warn)"></span>硫酸銅 CuSO₄<span class="q" style="color:var(--warn)">5 → 2（差 3）</span></div></div>
+  </div>
+  <div class="toast"><svg class="i" style="width:18px;height:18px;color:#7CFFB2"><use href="#check"/></svg>已存：硝酸鉀 3 瓶</div>
+  <nav class="nav"><a><svg class="i"><use href="#home"/></svg>今天</a><a><svg class="i"><use href="#cal"/></svg>課表</a>
+    <a><svg class="i"><use href="#todo"/></svg>待辦<span class="n">3</span></a><a class="on"><svg class="i"><use href="#count"/></svg>盤點</a><a><svg class="i"><use href="#grid"/></svg>更多</a></nav>
+</div></div>
+
+<!-- ===================== 手機：新增準備事項（底部抽屜） ===================== -->
+<div class="screen" id="p-add"><div class="ph">
+  <div class="top"><div class="row"><h1>待辦</h1><div class="sp"></div><div class="icbtn"><svg class="i"><use href="#search"/></svg></div></div></div>
+  <div class="sec"><div class="todo"><div class="it"><div class="ck"></div><div><div class="t">冰塊 × 1 袋</div><div class="s">今天 第5節　化二 三誠</div></div></div>
+    <div class="it"><div class="ck"></div><div><div class="t">50mL 燒杯 × 20 個</div><div class="s">明天 第3節　化一 二群</div></div></div></div></div>
+  <div class="scrim"></div>
+  <div class="sheet"><div class="grab"></div><h3>新增準備事項</h3>
+    <div class="fld"><label>哪一堂課（10/02 五）</label><div class="lesson"><span class="on">第1節 化二 三博</span><span>第2節 化二 三慧</span><span>第5節 化一 二樂</span><span>不對應</span></div></div>
+    <div class="fld"><label>要準備的東西</label><div class="row3"><div class="box act">燒杯|</div><div class="box">20</div><div class="box">個</div></div>
+      <div class="sug"><div>50mL 燒杯　<small>器材區3-A・庫存 283 個</small></div><div>100mL 燒杯　<small>器材區3-A・庫存 123 個</small></div><div>250mL 燒杯　<small>器材區3-B・庫存 96 個</small></div></div></div>
+    <div class="fld"><div class="box" style="color:var(--pri);font-weight:700;justify-content:center"><svg class="i"><use href="#plus"/></svg>再加一樣</div></div>
+    <div class="fld"><label>備註</label><div class="box" style="color:var(--mute)">例：便條內容、老師自己來拿</div></div>
+    <div class="btn p" style="margin-top:14px">儲存</div></div>
+</div></div>
+
+<!-- ===================== 手機：深色模式 今天 ===================== -->
+
+<!-- ===================== 平板：課表＋詳細 ===================== -->
+<div class="screen" id="t-week"><div class="app">
+  <aside class="side"><div class="brand"><div class="logo"><svg class="i"><use href="#flask"/></svg></div><div><b>實驗室管理</b><small>中山女高 設備組</small></div></div>
+    <a><svg class="i"><use href="#home"/></svg>今天</a><a class="on"><svg class="i"><use href="#cal"/></svg>實驗室課表</a><a><svg class="i"><use href="#todo"/></svg>準備事項<span class="n">3</span></a>
+    <a><svg class="i"><use href="#count"/></svg>盤點</a><div class="grp">庫存</div><a><svg class="i"><use href="#box"/></svg>品項查詢</a><a><svg class="i"><use href="#alert"/></svg>需補充<span class="n">2</span></a>
+    <a><svg class="i"><use href="#cart"/></svg>請購</a><a><svg class="i"><use href="#swap"/></svg>借用</a></aside>
+  <main class="main">
+    <div class="mh"><div><h1>實驗室課表</h1><div class="sub">115.09.28（一）～10.02（五）　第 5 週</div></div><div class="sp"></div><div class="search"><svg class="i"><use href="#search"/></svg>找班級、老師、實驗…</div></div>
+    <div class="tbar"><div class="pill"><svg class="i" style="width:16px;height:16px"><use href="#left"/></svg></div><div class="pill">本週</div><div class="pill"><svg class="i" style="width:16px;height:16px"><use href="#right"/></svg></div>
+      <div class="segw"><span>單日</span><span class="on">整週</span><span>月曆</span><span>清單</span></div><div class="sp"></div>
+      <div class="pill on">化學實驗室一</div><div class="pill">化學實驗室二</div><div class="pill">生物…</div></div>
+    <div class="split">
+      <div class="card" style="overflow:hidden"><table class="wk"><tr><th style="width:62px"></th><th>一 9/28</th><th>二 9/29</th><th>三 9/30</th><th class="today">四<div>10/1</div></th><th>五 10/2</th></tr>
+        <tr><td class="pr"><b>1</b>08:10</td><td rowspan="1"><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二捷 仲文</div></td><td></td><td></td></tr>
+        <tr><td class="pr"><b>2</b>09:10</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二信 仲文</div></td><td></td><td></td></tr>
+        <tr><td class="pr"><b>3</b>10:10</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二群 建華</div></td><td><div class="ev sel" style="background:var(--t-lab)"><b>酸鹼滴定</b>二業 光輝<span class="td">📝1</span></div></td><td></td></tr>
+        <tr><td class="pr"><b>4</b>11:10</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二廉 仲文</div></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二平 建華</div></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二和 光輝</div></td><td></td></tr>
+        <tr><td class="pr"><b>午</b>12:00</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="pr"><b>5</b>13:10</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二慧 琪玟</div></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二博 琪玟</div></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二樂 光輝</div></td></tr>
+        <tr><td class="pr"><b>6</b>14:10</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td></td><td><div class="ev" style="background:var(--t-lab)"><b>酸鹼滴定</b>二愛 琪玟</div></td><td></td></tr>
+        <tr><td class="pr"><b>7</b>15:20</td><td><div class="ev" style="background:var(--t-off)"><b>教師節</b>放假</div></td><td></td><td></td><td></td><td></td></tr>
+      </table></div>
+      <div class="card det"><span class="tag" style="background:var(--t-lab)">實驗課</span><h3>酸鹼滴定</h3>
+        <div class="m"><svg class="i" style="width:15px;height:15px"><use href="#clock"/></svg>10/01（四）第 3 節　10:10–11:00</div>
+        <div class="m"><svg class="i" style="width:15px;height:15px"><use href="#pin"/></svg>化學實驗室一　｜　二業　光輝老師　｜　12 組</div>
+        <div class="blk"><b>器材（12 組）</b><div class="kit"><span>滴定管 50mL × 12</span><span class="okk">有 20 ✔</span></div><div class="kit"><span>錐形瓶 250mL × 24</span><span class="okk">有 60 ✔</span></div>
+          <div class="kit"><span>酚酞指示劑 × 12 滴瓶</span><span class="ng">有 8 ✘</span></div><div class="kit"><span>0.1M NaOH × 1.2 L</span><span class="okk">有 3 L ✔</span></div></div>
+        <div class="blk"><b>準備事項</b><div class="mini"><div class="ck"></div>冰塊 × 1 袋</div><div class="mini"><div class="ck on"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg></div><span style="color:var(--mute);text-decoration:line-through">洗瓶 × 12</span></div></div>
+        <div class="btns2"><div class="btn s g"><svg class="i"><use href="#plus"/></svg>加準備事項</div><div class="btn s p"><svg class="i"><use href="#print"/></svg>準備單</div></div></div>
+    </div>
+  </main></div></div>
+
+<!-- ===================== 電腦：首頁儀表板 ===================== -->
+<div class="screen" id="d-home"><div class="app">
+  <aside class="side"><div class="brand"><div class="logo"><svg class="i"><use href="#flask"/></svg></div><div><b>實驗室管理</b><small>中山女高 設備組</small></div></div>
+    <a class="on"><svg class="i"><use href="#home"/></svg>今天</a><a><svg class="i"><use href="#cal"/></svg>實驗室課表</a><a><svg class="i"><use href="#todo"/></svg>準備事項<span class="n">3</span></a>
+    <a><svg class="i"><use href="#count"/></svg>盤點</a><div class="grp">庫存</div><a><svg class="i"><use href="#box"/></svg>品項查詢</a><a><svg class="i"><use href="#alert"/></svg>需補充<span class="n">2</span></a>
+    <a><svg class="i"><use href="#cart"/></svg>請購</a><a><svg class="i"><use href="#swap"/></svg>借用</a><div class="grp">其他</div><a><svg class="i"><use href="#moon"/></svg>深色模式</a></aside>
+  <main class="main">
+    <div class="mh"><div><h1>早安！今天是 10/01（四）</h1><div class="sub">第 5 週　｜　現在第 3 節（10:10–11:00）</div></div><div class="sp"></div><div class="search"><svg class="i"><use href="#search"/></svg>找品項、班級、老師…</div></div>
+    <div class="kpis">
+      <div class="card kpi"><small><svg class="i" style="width:16px;height:16px"><use href="#flask"/></svg>今天的課</small><b>13</b><span>化一 7・化二 6</span></div>
+      <div class="card kpi"><small><svg class="i" style="width:16px;height:16px"><use href="#todo"/></svg>待準備</small><b style="color:var(--warn)">3</b><span>1 項今天要用</span></div>
+      <div class="card kpi"><small><svg class="i" style="width:16px;height:16px"><use href="#alert"/></svg>需補充</small><b style="color:var(--bad)">2</b><span>低於安全存量</span></div>
+      <div class="card kpi"><small><svg class="i" style="width:16px;height:16px"><use href="#cart"/></svg>請購中</small><b>3</b><span>1 項已到貨待入庫</span></div>
+      <div class="card kpi"><small><svg class="i" style="width:16px;height:16px"><use href="#swap"/></svg>借出中</small><b>1</b><span>沒有逾期</span></div></div>
+    <div class="grid3">
+      <div class="card"><div class="ch"><h3>六間實驗室・現在</h3><span class="st b">第 3 節</span><span class="more">看課表 ›</span></div>
+        <div class="labs6"><div class="lt busy"><div class="n">化學實驗室一<span class="st b">上課中</span></div><b>酸鹼滴定</b><span>二業　光輝老師</span></div>
+          <div class="lt busy"><div class="n">化學實驗室二<span class="st b">上課中</span></div><b>沉澱反應</b><span>三愛　錦瑞老師</span></div>
+          <div class="lt free"><div class="n">化學實驗室三<span class="st f">空堂</span></div><b>—</b><span>下一堂：第 6 節</span></div>
+          <div class="lt free"><div class="n">生物實驗室一<span class="st f">空堂</span></div><b>—</b><span>今天沒有課</span></div>
+          <div class="lt free"><div class="n">生物實驗室二<span class="st f">空堂</span></div><b>—</b><span>下一堂：第 5 節</span></div>
+          <div class="lt free"><div class="n">生物實驗室三<span class="st f">空堂</span></div><b>—</b><span>今天沒有課</span></div></div>
+        <div class="ch" style="padding-top:0"><h3 style="font-size:14px;color:var(--sub)">今天各節使用</h3></div>
+        <div class="heat"><table><tr><td class="h"></td><td>1</td><td>2</td><td>3</td><td>4</td><td>午</td><td>5</td><td>6</td><td>7</td></tr>
+          <tr><td class="h">化一</td><td class="e"></td><td class="e"></td><td class="x nw">二業</td><td class="x">二和</td><td class="e"></td><td class="x">二博</td><td class="x">二愛</td><td class="e"></td></tr>
+          <tr><td class="h">化二</td><td class="e"></td><td class="x">三和</td><td class="x nw">三愛</td><td class="e"></td><td class="e"></td><td class="x">三誠</td><td class="x">三平</td><td class="e"></td></tr>
+          <tr><td class="h">化三</td><td class="e"></td><td class="e"></td><td class="e nw"></td><td class="e"></td><td class="o">社團</td><td class="e"></td><td class="x">二仁</td><td class="e"></td></tr>
+          <tr><td class="h">生一</td><td class="e"></td><td class="e"></td><td class="e nw"></td><td class="e"></td><td class="e"></td><td class="e"></td><td class="e"></td><td class="e"></td></tr>
+          <tr><td class="h">生二</td><td class="e"></td><td class="e"></td><td class="e nw"></td><td class="e"></td><td class="e"></td><td class="x">一仁</td><td class="e"></td><td class="e"></td></tr>
+          <tr><td class="h">生三</td><td class="e"></td><td class="e"></td><td class="e nw"></td><td class="e"></td><td class="e"></td><td class="e"></td><td class="e"></td><td class="e"></td></tr></table></div></div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card"><div class="ch"><h3>待準備</h3><span class="more">全部 ›</span></div>
+          <div class="lst"><div class="it"><div class="ck"></div>冰塊 × 1 袋<span class="r"><span class="late">今天</span> 第5節 化二</span></div>
+            <div class="it"><div class="ck"></div>50mL 燒杯 × 20<span class="r">明天 第3節 化一</span></div>
+            <div class="it"><div class="ck"></div>剪刀 × 10 把<span class="r">10/05（一）</span></div></div></div>
+        <div class="card"><div class="ch"><h3>需補充</h3><span class="more">加入請購 ›</span></div>
+          <div class="lst"><div class="it"><span class="dt" style="background:var(--bad)"></span>酚酞指示劑<span class="r">剩 8，安全 12</span></div>
+            <div class="it"><span class="dt" style="background:var(--bad)"></span>秤量紙<span class="r">剩 1 包，安全 3</span></div></div></div>
+      </div>
+    </div>
+  </main></div></div>
+
+<script>
+const s = (location.hash || '#p-today').slice(1).split(',');
+document.getElementById(s[0]).classList.add('on');
+if (s[1] === 'dark') document.documentElement.classList.add('dark');
+</script>
+</body></html>
