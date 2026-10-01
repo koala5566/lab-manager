@@ -61,6 +61,7 @@ const MENU = [
   ]],
   ['🔧 維護', [
     ['立即備份', 'backupNow'],
+    ['📦 學期末永久備份（不會被自動刪除）', 'backupForever'],
     ['📧 每天早上 email 提醒（設定）', 'mailSetupDialog'],
     ['首頁、美化與資料保護（一次設定）', 'setupEnhancements'],
     null,
@@ -385,6 +386,7 @@ function fillMissingIds() {
  */
 function onEdit(e) {
   if (!e || !e.range) return;
+  if (typeof logEdit_ === 'function') logEdit_(e);   // 修改紀錄（07_安全美化）
   const sheet = e.range.getSheet();
   if (sheet.getName() !== '品項' || e.range.getLastRow() < 2) return;
   const first = Math.max(e.range.getRow(), 2);

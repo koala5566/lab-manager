@@ -312,6 +312,10 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 .authbar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:95;background:var(--bad);color:#fff;border-radius:14px;padding:8px 10px 8px 14px;display:flex;gap:10px;align-items:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 .authbar a{color:#fff;background:rgba(255,255,255,.2);text-decoration:none}
 #cSave.cf{background:var(--warn);border-color:var(--warn)}
+.lgrp{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 6px;background:var(--pri-weak);border-bottom:1px solid var(--line)}
+.lgrp .lgh{display:flex;align-items:center;gap:6px;flex:1;min-width:0;background:none;border:0;padding:4px;font-size:14px;color:var(--text);text-align:left;cursor:pointer}
+.lgrp .lgh b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lgrp .lgh .i{transform:rotate(90deg);transition:transform .2s;flex:none}
+.lgrp.fold .lgh .i{transform:none}.lgrp .btn{flex:none}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
@@ -595,9 +599,28 @@ function badges() {
   $$('#nav button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-go') === nav); });
   $$('#side .nv[data-go]').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-go') === S.route); });
 }
-function go(r) {
+function go(r, fromHist) {
+  if (!fromHist && r !== S.route) histPush({ route: r });
   S.route = r; closeSheet(); badges(); render();
   window.scrollTo(0, 0);
+}
+
+// 手機的「返回」鍵：先關掉彈出的視窗、再回上一個分頁，不會一按就離開網頁
+// （Apps Script 網頁要用 google.script.history 才能記上一頁）
+var HIST = !!(window.google && google.script && google.script.history);
+function histPush(state) { if (HIST) try { google.script.history.push(state); } catch (e) { } }
+function histInit() {
+  if (!HIST) return;
+  try { google.script.history.replace({ route: S.route }); } catch (e) { }
+  google.script.history.setChangeHandler(function (e) {
+    if ($('#sheet')) {
+      tryClose();
+      if ($('#sheet')) histPush({ route: S.route, sheet: 1 });   // 還沒存、留在畫面上：把這一步補回去
+      return;
+    }
+    var r = e && e.state && e.state.route;
+    if (r && r !== S.route) go(r, true);
+  });
 }
 function render() {
   var m = $('#main');
@@ -608,6 +631,7 @@ function render() {
 
 // ---------------------------------------------------------------- 抽屜（手機從下面滑出、電腦在中間）
 function openSheet(html, onOpen) {
+  if (!$('#sheet')) histPush({ route: S.route, sheet: 1 });
   closeSheet(true);
   var sc = document.createElement('div'); sc.className = 'scrim'; sc.id = 'scrim';
   var sh = document.createElement('div'); sh.className = 'sheet'; sh.id = 'sheet';
@@ -769,6 +793,25 @@ function setTodo(t, st, msg, noUndo) {
     badges(); rerenderKeepSheet(); toast('沒有存到：' + e, true);
   });
 }
+// 好幾項一起改狀態（全部打勾），可以復原
+function setTodos(ts, st, msg) {
+  ts = ts.filter(function (t) { return t.status !== st; });
+  if (!ts.length) return;
+  var olds = ts.map(function (t) { return t.status; });
+  ts.forEach(function (t) { t.status = st; });
+  badges(); rerenderKeepSheet(); S.dirty = true;
+  var send = function (list, s2) {
+    return callQ('todoSet', [list.map(function (t) { return t.id; }), s2], list.length + ' 項（' + s2 + '）');
+  };
+  toast(msg, false, function () {
+    ts.forEach(function (t, i) { t.status = olds[i]; });
+    badges(); rerenderKeepSheet(); toast('已復原 ' + ts.length + ' 項');
+    send(ts, olds[0]).catch(function (e) { toast('沒有存到：' + e, true); });
+  });
+  send(ts, st).catch(function (e) {
+    ts.forEach(function (t, i) { t.status = olds[i]; }); badges(); rerenderKeepSheet(); toast('沒有存到：' + e, true);
+  });
+}
 function rerenderKeepSheet() {
   render();
   var sh = $('#sheet');
@@ -911,7 +954,8 @@ function lessonHtml(b) {
       '<button class="btn p s" id="lSave" style="margin-top:10px;width:100%">' + ic('check', 's') + '儲存實驗名稱</button><datalist id="kitList"></datalist></div>' +
       '<div class="blk"><b>器材' + (b.groups ? '（' + esc(b.groups) + ' 組）' : '') + '</b><div id="lKit">' + (b.content ? sk(16, 3) : '<span class="muted">填好實驗名稱後，會用「實驗套組」檢查器材夠不夠。</span>') + '</div></div>';
   }
-  h += '<div class="blk"><b>準備事項</b>' + (ts.length ? ts.map(function (t) {
+  var tp = ts.filter(function (t) { return t.status === '待準備'; }).length;
+  h += '<div class="blk"><b style="display:flex;align-items:center">準備事項' + (tp >= 2 ? '<span class="sp"></span><button class="btn g s" id="lAllCk" style="margin-left:auto">' + ic('check', 's') + '全部打勾（' + tp + '）</button>' : '') + '</b>' + (ts.length ? ts.map(function (t) {
     return '<div class="mini' + (t.status !== '待準備' ? ' done' : '') + '"><button class="ck' + (t.status !== '待準備' ? ' on' : '') + '" data-ck="' + esc(t.id) + '">' + (t.status !== '待準備' ? ic('check', 's') : '') + '</button><span>' +
       esc(t.what + (t.qty ? ' × ' + t.qty + ' ' + t.unit : '')) + '</span>' + (t.buy ? '<span class="buyb">🛒 ' + esc(t.buy) + '</span>' : '') + '</div>';
   }).join('') : '<span class="muted">還沒有</span>') + '</div>' +
@@ -925,6 +969,11 @@ function fillLesson(el, b) {
   $$('[data-close]', box).forEach(function (x) { x.onclick = function () { closeSheet(); }; });
   $$('[data-unsel]', box).forEach(function (x) { x.onclick = function () { S.week.sel = null; render(); }; });
   bindTodoRows(box);
+  var ak = $('#lAllCk', box);
+  if (ak) ak.onclick = function () {
+    var list = todosOf(b).filter(function (t) { return t.status === '待準備'; });
+    setTodos(list, '已準備', '✔ 這堂課 ' + list.length + ' 項都準備好了');
+  };
   $('#lAdd', box).onclick = function () { openAdd({ date: b.date, lab: b.lab, period: b.periodText, cls: b.cls, teacher: b.teacher }); };
   var pr = $('#lPrep', box);
   if (pr) pr.onclick = function () { window.open(S.D.url + '?page=prep&from=' + b.date + '&to=' + b.date, '_blank'); };
@@ -1114,6 +1163,15 @@ function vTodo(m) {
   if (!list.length) h += '<div class="card" style="margin-top:12px"><div class="empty">' + ART.duck(110) + '<b>' + (S.todoView === 'todo' ? '全部準備好了！' : '最近 7 天沒有完成的事項') + '</b>' +
     (S.todoView === 'todo' ? '老師交代新的東西，按右下角 ＋ 記下來' : '') + '</div></div>';
   var last = null, grp = '';
+  // 待準備：同一天裡，同一堂課（實驗室＋節次＋班級）有 2 項以上的收成一組，可以整組打勾、收合
+  if (S.todoView === 'todo') {
+    var lk = function (t) { return (t.date || '') + '|' + t.lab + '|' + t.period + '|' + t.cls; };
+    var cnt = {}, order = [], by = {};
+    list.forEach(function (t) { var k = lk(t); if (!(k in by)) { by[k] = []; order.push(k); } by[k].push(t); });
+    list = [];
+    order.forEach(function (k) { by[k].forEach(function (t, i) { t._g = by[k].length >= 2 && (by[k][0].lab || by[k][0].period) ? k : ''; t._gi = i; t._gn = by[k].length; list.push(t); }); });
+  }
+  var G = {}; S._grp = G;
   list.forEach(function (t) {
     var d = t.date, lbl, cls = '';
     if (!d) lbl = '沒有指定日期';
@@ -1123,12 +1181,32 @@ function vTodo(m) {
       cls = n < 0 && t.status === '待準備' ? 'late' : n <= 1 ? 'soon' : '';
     }
     if (lbl !== last) { if (last !== null) grp += '</div>'; grp += '<div class="day ' + cls + '">' + ic('cal', 's') + esc(lbl) + '</div><div class="todo">'; last = lbl; }
+    if (S.todoView === 'todo' && t._g) {
+      var fold = !!(S.todoFold || {})[t._g];
+      if (t._gi === 0) {
+        G[t._g] = list.filter(function (x) { return x._g === t._g; });
+        grp += '<div class="lgrp' + (fold ? ' fold' : '') + '"><button class="lgh" data-fold="' + esc(t._g) + '">' + ic('right', 's') +
+          '<b>' + esc([perLabel(t.period), short(t.lab), t.cls].filter(String).join(' ') || '同一堂課') + '</b><span class="muted">' + t._gn + ' 項</span></button>' +
+          '<button class="btn g s" data-allck="' + esc(t._g) + '">' + ic('check', 's') + '全部打勾</button></div>';
+      }
+      if (!fold) grp += todoRow(t, { noDate: true });
+      return;
+    }
     grp += todoRow(t, { noDate: true });
   });
   if (last !== null) grp += '</div>';
   m.innerHTML = h + grp + '</div>';
   bindCommon(m); bindTodoRows(m);
   $$('[data-tv]', m).forEach(function (b) { b.onclick = function () { S.todoView = b.getAttribute('data-tv'); render(); }; });
+  $$('[data-fold]', m).forEach(function (b) {
+    b.onclick = function () { var k = b.getAttribute('data-fold'); S.todoFold = S.todoFold || {}; S.todoFold[k] = !S.todoFold[k]; render(); };
+  });
+  $$('[data-allck]', m).forEach(function (b) {
+    b.onclick = function () {
+      var g = (S._grp || {})[b.getAttribute('data-allck')] || [];
+      setTodos(g, '已準備', '✔ ' + g.length + ' 項都準備好了');
+    };
+  });
 }
 
 // ---------------------------------------------------------------- 新增準備事項（抽屜）
@@ -1337,16 +1415,16 @@ function vCount(m) {
   $('#cPrev', m).onclick = function () { if (C.idx > 0) { C.idx--; render(); } };
   q.onkeydown = function (e) { if (e.key === 'Enter') $('#cSave', m).click(); };
   $('#cSave', m).onclick = function () {
-    var qty = q.value.trim(), note = $('#cNote', m).value.trim(), btn = this;
+    var qty = q.value.trim(), note = $('#cNote', m).value.trim(), btn = this, u = cur.unit ? ' ' + cur.unit : '';
     if (qty === '' && note === '') {
       qty = String(cur.lastQty);
       if (qty === '') { toast('請填數量或說明', true); return; }
       // 沒填就按：先問一次，避免還沒數就被記成「跟上次一樣」
-      if (!btn.classList.contains('cf')) {
-        btn.classList.add('cf'); btn.textContent = '沿用上次 ' + qty + (cur.unit ? ' ' + cur.unit : '') + '？再按一次';
-        clearTimeout(btn.tm); btn.tm = setTimeout(function () { btn.classList.remove('cf'); btn.innerHTML = '存好，下一項' + ic('right', 's'); }, 3000);
-        return;
-      }
+      if (!twice(btn, 'same', '沿用上次 ' + qty + u + '？再按一次')) return;
+    } else if (qty !== '') {
+      // 數量怪怪的（多打一個 0、負數…）：先問一次
+      var w = qtyWarn(qty, cur.lastQty, u);
+      if (w && !twice(btn, 'q:' + qty, w + '？再按一次')) return;
     }
     var old = [cur.qty, cur.note];
     cur.qty = qty; cur.note = note;
@@ -1357,6 +1435,25 @@ function vCount(m) {
       cur.qty = old[0]; cur.note = old[1]; render(); toast('沒有存到「' + cur.name + '」：' + e, true);
     });
   };
+}
+// 按兩次才算：第一次按鈕變橘色顯示 text，3 秒內再按同一件事（key）才回傳 true
+function twice(btn, key, text) {
+  if (btn._cf === key) { btn._cf = null; clearTimeout(btn.tm); btn.classList.remove('cf'); return true; }
+  if (!btn._html) btn._html = btn.innerHTML;
+  btn._cf = key; btn.classList.add('cf'); btn.textContent = text;
+  clearTimeout(btn.tm);
+  btn.tm = setTimeout(function () { btn._cf = null; btn.classList.remove('cf'); btn.innerHTML = btn._html; }, 3000);
+  return false;
+}
+// 盤點數量合不合理：負數、很大、比上次多 5 倍以上
+function qtyWarn(qty, last, u) {
+  var n = Number(qty);
+  if (isNaN(n)) return '';
+  if (n < 0) return '數量是負的（' + qty + u + '）';
+  var l = Number(last);
+  if (String(last).trim() !== '' && !isNaN(l) && l > 0 && n >= l * 5 && n - l >= 5) return '比上次多很多（' + l + ' → ' + qty + u + '）';
+  if (n >= 1000) return '數量很大（' + qty + u + '）';
+  return '';
 }
 function finishCountSheet() {
   var rows = cntRows(), done = rows.filter(isDone).length;
@@ -1433,6 +1530,7 @@ function vSearch(m) {
 
 // ---------------------------------------------------------------- 開始
 document.getElementById('fab').onclick = function () { openAdd({}); };
+histInit();
 load();
 </script>
 </body></html>

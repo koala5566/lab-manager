@@ -8,6 +8,8 @@
  *   4. 資料保護（警告模式）：改到盤點紀錄、設定、自動欄位時先跳出確認
  *   5. 每週五 17:00 自動備份（完成盤點後也會自動備份），備份放在雲端硬碟「實驗室管理備份」資料夾，保留最近 10 份
  *   6. 刪除偵測：盤點紀錄或品項被刪列、重要分頁被刪時，右下角警告並記在「操作紀錄」
+ *   7. 修改紀錄：直接在試算表改品項、盤點紀錄、實驗套組、設定…時，記下誰、何時、哪一格、改前改後（「修改紀錄」工作表）
+ *   8. 永久備份：完成盤點、選單「📦 學期末永久備份」的備份不會被自動刪除
  * 選單「🔧 維護 → 立即備份」：馬上備份一份。
  * 需要「01_基礎」～「06_補充查詢」。
  */
@@ -56,13 +58,15 @@ function goHome() {
  * 複製整份試算表（含程式）到雲端硬碟「實驗室管理備份」資料夾，只保留最近 10 份。
  * quiet=true 時不跳提示（給完成盤點、每週排程用）。回傳備份檔名。
  */
-function backupNow(reason, quiet) {
+function backupNow(reason, quiet, forever) {
   if (typeof reason !== 'string') reason = '手動';
+  if (reason === '完成盤點') forever = true;   // 每學期的盤點結果永久留著
   const ss = SpreadsheetApp.getActive();
   const folders = DriveApp.getFoldersByName(BACKUP_FOLDER);
   const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(BACKUP_FOLDER);
   const stamp = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy-MM-dd_HHmm');
-  const name = '備份_' + stamp + '_' + reason;
+  // 「永久備份_」開頭的不算在最近 10 份裡，不會被移到垃圾桶
+  const name = (forever ? '永久備份_' : '備份_') + stamp + '_' + reason;
   DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
 
   const files = [];
@@ -79,6 +83,14 @@ function backupNow(reason, quiet) {
       '\n\n（只保留最近 ' + BACKUP_KEEP + ' 份，較舊的會移到垃圾桶。）', SpreadsheetApp.getUi().ButtonSet.OK);
   }
   return name;
+}
+
+/** 選單：學期末永久備份（不會被自動刪除）。 */
+function backupForever() {
+  const ui = SpreadsheetApp.getUi();
+  const name = backupNow('學期末', true, true);
+  ui.alert('永久備份完成', '已備份到雲端硬碟「' + BACKUP_FOLDER + '」資料夾：\n' + name +
+    '\n\n「永久備份_」開頭的檔案不會被自動刪除。建議每學期結束做一次。', ui.ButtonSet.OK);
 }
 
 /** 每週排程呼叫。 */
@@ -420,4 +432,56 @@ function setupDashboard_() {
   sh.setFrozenRows(0);
   ss.setActiveSheet(sh);
   ss.moveActiveSheet(1);
+}
+
+// ---------------------------------------------------------------- 修改紀錄（直接在試算表改資料時）
+
+const EDIT_LOG = '修改紀錄';
+const EDIT_LOG_SHEETS = ['品項', '盤點紀錄', '實驗套組', '設定', '請購清單', '借用紀錄', '實驗排程', '準備事項'];
+const EDIT_LOG_MAX = 5000;   // 超過就刪掉最舊的 1000 列
+// 用來表示「這一列是哪個東西」的欄位，依序找第一個有的
+const EDIT_LOG_ID = ['編號', '品名', '事項', '套組名稱', '實驗名稱', '借用人'];
+
+/**
+ * 由 onEdit（01_基礎）呼叫。只記「人」在試算表上的修改；程式寫入（網頁、對話框）不會觸發，不會記。
+ * 任何錯誤都吞掉，不影響編輯。
+ */
+function logEdit_(e) {
+  try {
+    if (!e || !e.range) return;
+    const sh = e.range.getSheet(), name = sh.getName();
+    if (EDIT_LOG_SHEETS.indexOf(name) < 0 || e.range.getRow() < 2 && e.range.getLastRow() < 2) return;
+    const nr = e.range.getNumRows(), nc = e.range.getNumColumns();
+    const lastCol = sh.getLastColumn();
+    const head = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+    const row = sh.getRange(e.range.getRow(), 1, 1, lastCol).getValues()[0];
+    let idText = '';
+    for (let i = 0; i < EDIT_LOG_ID.length; i++) {
+      const c = head.indexOf(EDIT_LOG_ID[i]);
+      if (c >= 0 && String(row[c]).trim()) { idText = String(row[c]).trim(); break; }
+    }
+    if (name === '設定') idText = String(row[0] || '').trim();
+    let user = '';
+    try { user = (e.user && e.user.getEmail && e.user.getEmail()) || Session.getActiveUser().getEmail() || ''; } catch (x) { user = ''; }
+    const show = function (v) { return v === undefined || v === null ? '（空白）' : v instanceof Date ? Utilities.formatDate(v, SCHOOL_TZ, 'yyyy/MM/dd') : String(v).slice(0, 200); };
+    const many = nr * nc > 1;
+    const rec = [Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy/MM/dd HH:mm:ss'), user, name, e.range.getA1Notation(),
+      many ? '（' + nr * nc + ' 格）' : head[e.range.getColumn() - 1] || '', idText + (many && nr > 1 ? ' 等 ' + nr + ' 列' : ''),
+      many ? '' : show(e.oldValue), many ? '一次改了 ' + nr * nc + ' 格（貼上、刪除或拖曳）' : show(e.value)];
+    const ss = SpreadsheetApp.getActive();
+    let log = ss.getSheetByName(EDIT_LOG);
+    if (!log) {
+      log = ss.insertSheet(EDIT_LOG);
+      log.getRange(1, 1, 1, 8).setValues([['時間', '誰', '工作表', '儲存格', '欄位', '項目', '原本', '改成']])
+        .setFontWeight('bold').setBackground('#DDEBF7');
+      log.setFrozenRows(1); log.setTabColor('#9AA0A6');
+      [140, 170, 80, 70, 90, 160, 160, 200].forEach(function (w, i) { log.setColumnWidth(i + 1, w); });
+    }
+    // 新的放最上面，打開就看到
+    log.insertRowAfter(1);
+    log.getRange(2, 1, 1, 8).setFontWeight('normal').setBackground(null).setNumberFormat('@').setValues([rec.map(function (v) { return typeof safeCell_ === 'function' ? safeCell_(v) : v; })]);
+    // 太多了：只留最新的 4000 筆（刪最下面最舊的）
+    const keep = EDIT_LOG_MAX - 1000;
+    if (log.getLastRow() > EDIT_LOG_MAX + 1) log.deleteRows(keep + 2, log.getLastRow() - keep - 1);
+  } catch (err) { /* 記錄失敗不影響編輯 */ }
 }

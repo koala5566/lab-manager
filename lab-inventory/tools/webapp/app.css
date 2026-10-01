@@ -210,3 +210,7 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 .authbar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:95;background:var(--bad);color:#fff;border-radius:14px;padding:8px 10px 8px 14px;display:flex;gap:10px;align-items:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 .authbar a{color:#fff;background:rgba(255,255,255,.2);text-decoration:none}
 #cSave.cf{background:var(--warn);border-color:var(--warn)}
+.lgrp{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 6px;background:var(--pri-weak);border-bottom:1px solid var(--line)}
+.lgrp .lgh{display:flex;align-items:center;gap:6px;flex:1;min-width:0;background:none;border:0;padding:4px;font-size:14px;color:var(--text);text-align:left;cursor:pointer}
+.lgrp .lgh b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lgrp .lgh .i{transform:rotate(90deg);transition:transform .2s;flex:none}
+.lgrp.fold .lgh .i{transform:none}.lgrp .btn{flex:none}
