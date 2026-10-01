@@ -76,7 +76,7 @@ function importScheduleDialog() {
         P = res; $('pv').disabled = false; $('pv').textContent = '重新預覽';
         let h = '<h3 style="margin:14px 0 4px">預覽：共 ' + res.total + ' 筆</h3><div class="cnt">' +
           Object.keys(res.byType).map(function (t) { return '<span style="background:' + (res.colors[t] || '#eee') + '">' + esc(t) + ' ' + res.byType[t] + '</span>'; }).join('') + '</div>';
-        if (res.replace) h += '<p class="hint">會先刪掉上次從這些工作表匯入的 ' + res.replace + ' 筆（' + esc(res.fromRoc) + ' 以後），再寫入新的。</p>';
+        if (res.replace) h += '<p class="hint">上次從這些工作表匯入的 ' + res.replace + ' 筆（' + esc(res.fromRoc) + ' 以後）：同一堂課原地更新（已填的實驗名稱、組數、狀態、備註保留），課表上沒有了的改成「取消」，不會刪除；手動登記的不會動。</p>';
         if (res.warnings.length) h += '<div class="warn">⚠ 請確認：\\n' + res.warnings.map(esc).join('\\n') + '</div>';
         if (res.weeks.length) {
           h += '<p style="margin:10px 0 4px"><b>實驗名稱</b>（可以先空白，之後在「實驗排程」補，或下次匯入時再填；已經填過的會保留）</p>' +
@@ -294,33 +294,80 @@ function importApply(o) {
   try {
     const p = importPlan_(o);
     ensureLabTypes_(p.rows.map(function (x) { return x.type; }));
-    const t = p.t, c = t.col, w = t.header.length;
+    // 只動「從這些工作表匯入、日期在起始日以後」的列，手動登記的列一格都不碰，也不重新排序
+    //   ・同一堂（實驗室＋日期＋節次＋班級）還在 → 原地更新（老師、類型；已填的實驗名稱、組數、狀態、備註保留）
+    //   ・課表新增的 → 加在最後面
+    //   ・課表已經沒有的 → 不刪，狀態改「取消」並在備註寫原因（要恢復改回狀態就好）
+    const t = importTable_(), c = t.col, w = t.header.length, sh = t.sheet;
     const names = o.names || {};
-    const fresh = p.rows.map(function (x) {
-      const row = new Array(w).fill('');
-      const k = x.kept || {};
+    const from = p.from, srcs = (o.sheets || []).map(function (x) { return x.sheet; });
+    const keyOf = function (lab, date, per, cls) { return [String(lab).trim(), date, String(per).trim(), String(cls).trim()].join('|'); };
+    const data = t.rows.map(function (r) { return r.slice(); });
+    const oldAt = {};   // 辨識碼 → [資料列索引]
+    data.forEach(function (r, i) {
+      const k = dateKey_(r[c['日期']]);
+      if (srcs.indexOf(String(r[c[IMPORT_COL]]).trim()) < 0 || !k || k < from) return;
+      const key = keyOf(r[c['教室']], k, periodVal_(r[c['節次']]), r[c['班級']]);
+      (oldAt[key] = oldAt[key] || []).push(i);
+    });
+    const used = {}, changed = {}, fresh = [];
+    let upd = 0, same = 0;
+    const set = function (row, col, val) { if (col in c) row[c[col]] = val; };
+    p.rows.forEach(function (x) {
+      const key = keyOf(x.lab, x.date, x.periodText, x.cls);
+      const prep = PREP_TYPES.indexOf(x.type) >= 0;
       let content = x.content;
       if (x.type === '實驗課') content = names[x.lab + '|' + mondayOf_(x.date)] || content;
-      const prep = PREP_TYPES.indexOf(x.type) >= 0;
-      const set = function (col, val) { if (col in c) row[c[col]] = val; };
-      set('日期', dateValue_(x.date)); set('節次', x.periodText); set('班級', x.cls); set('教師', x.teacher);
-      set('教室', x.lab); set('實驗名稱', content); set('組數', k.groups || '');
-      set('狀態', k.status || (prep ? '待準備' : '')); set('備註', k.note || ''); set('用途類型', x.type); set(IMPORT_COL, x.source);
-      return row;
+      const list = (oldAt[key] || []).filter(function (i) { return !used[i]; });
+      if (list.length) {
+        const i = list[0], r = data[i], before = JSON.stringify(r);
+        used[i] = true;
+        set(r, '教師', x.teacher); set(r, '用途類型', x.type); set(r, IMPORT_COL, x.source);
+        if (!String(r[c['實驗名稱']]).trim() || (x.type === '實驗課' && names[x.lab + '|' + mondayOf_(x.date)])) set(r, '實驗名稱', content);
+        const st = String(r[c['狀態']]).trim();
+        // 之前因為「課表已經沒有」被取消、這次又出現 → 恢復
+        if (st === '取消' && /重新匯入時課表已沒有/.test(String(r[c['備註']]))) {
+          set(r, '狀態', prep ? '待準備' : '');
+          set(r, '備註', String(r[c['備註']]).replace(/；?重新匯入時課表已沒有（[^）]*）/, ''));
+        } else if (!st && prep) set(r, '狀態', '待準備');
+        if (JSON.stringify(r) !== before) { changed[i] = true; upd++; } else same++;
+        return;
+      }
+      const row = new Array(w).fill('');
+      set(row, '日期', dateValue_(x.date)); set(row, '節次', x.periodText); set(row, '班級', x.cls); set(row, '教師', x.teacher);
+      set(row, '教室', x.lab); set(row, '實驗名稱', content); set(row, '狀態', prep ? '待準備' : ''); set(row, '用途類型', x.type); set(row, IMPORT_COL, x.source);
+      fresh.push(row);
     });
-    const all = p.keep.concat(fresh);
-    all.sort(function (a, b) {
-      const x = dateKey_(a[c['日期']]) || '9999', y = dateKey_(b[c['日期']]) || '9999';
-      return x < y ? -1 : x > y ? 1 : naturalCompare_(a[c['教室']], b[c['教室']]) || naturalCompare_(periodVal_(a[c['節次']]), periodVal_(b[c['節次']]));
+    const stamp = rocText_(today_());
+    let gone = 0;
+    Object.keys(oldAt).forEach(function (key) {
+      oldAt[key].forEach(function (i) {
+        if (used[i]) return;
+        const r = data[i];
+        if (String(r[c['狀態']]).trim() === '取消') return;
+        r[c['狀態']] = '取消';
+        r[c['備註']] = [String(r[c['備註']]).trim(), '重新匯入時課表已沒有（' + stamp + '）'].filter(String).join('；');
+        changed[i] = true; gone++;
+      });
     });
-    const sh = t.sheet;
     fixPeriodCol_(sh, c['節次'] + 1);
-    if (all.length + 1 > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), all.length + 51 - sh.getMaxRows());
-    sh.getRange(2, 1, sh.getMaxRows() - 1, w).clearContent();
-    if (all.length) sh.getRange(2, 1, all.length, w).setValues(all.map(function (r) { return r.map(safeCell_); }));
-    const noName = fresh.filter(function (r) { return r[c['用途類型']] === '實驗課' && !String(r[c['實驗名稱']]).trim(); }).length;
-    return '已匯入 ' + fresh.length + ' 筆到「實驗排程」' + (p.old.length ? '（取代上次匯入的 ' + p.old.length + ' 筆）' : '') + '。' +
-      (noName ? '\n\n還有 ' + noName + ' 筆實驗課沒有實驗名稱：問到老師後，在「實驗排程」的「實驗名稱」欄補上，或再匯入一次時填。' : '') +
+    // 有改的列：寫回最上面到最下面那一段（一次寫入）
+    const idx = Object.keys(changed).map(Number);
+    if (idx.length) {
+      const lo = Math.min.apply(null, idx), hi = Math.max.apply(null, idx);
+      sh.getRange(lo + 2, 1, hi - lo + 1, w).setValues(data.slice(lo, hi + 1).map(function (r) { return r.slice(0, w).map(safeCell_); }));
+    }
+    if (fresh.length) {
+      if (typeof appendRows_ === 'function') {
+        appendRows_(t, fresh.map(function (r) { const o2 = {}; t.header.forEach(function (h, j) { if (h && !(h in o2)) o2[h] = r[j]; }); return o2; }));
+      } else {
+        fresh.forEach(function (r) { const o2 = {}; t.header.forEach(function (h, j) { if (h && !(h in o2)) o2[h] = r[j]; }); appendRow_(t, o2); });
+      }
+    }
+    const noName = p.rows.filter(function (x) { return x.type === '實驗課' && !x.content && !names[x.lab + '|' + mondayOf_(x.date)]; }).length;
+    return '已匯入「實驗排程」：新增 ' + fresh.length + ' 筆、更新 ' + upd + ' 筆、沒變 ' + same + ' 筆' +
+      (gone ? '；課表上已經沒有的 ' + gone + ' 筆改成「取消」（沒有刪掉，備註有寫原因）' : '') + '。\n手動登記的資料都沒有動。' +
+      (noName ? '\n\n還有實驗課沒有實驗名稱：問到老師後，用「✏️ 補實驗名稱」或網頁點課補上。' : '') +
       (p.warnings.length ? '\n\n⚠ 有 ' + p.warnings.length + ' 個疑點（預覽時列出的），請再確認。' : '');
   } finally {
     lock.releaseLock();

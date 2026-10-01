@@ -77,6 +77,20 @@ function qFlush(manual) {
   next();
 }
 setInterval(function () { qFlush(); }, 20000);
+
+// 有人（別台裝置、試算表）改了資料：每分鐘問一次版本，變了就悄悄重新整理
+// 正在打字、開著視窗、盤點中、還有沒上傳的，都先不動
+setInterval(function () { syncCheck(); }, 60000);
+function syncCheck() {
+  if (!S.D || document.hidden || $('#sheet') || qGet().length || syncCheck.busy) return;
+  if (['today', 'todo', 'week'].indexOf(S.route) < 0) return;
+  var a = document.activeElement; if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+  syncCheck.busy = true;
+  call('appVersion').then(function (v) {
+    if (v && S.D.ver && v !== S.D.ver) return refresh(false).then(function () { toast('🔄 已同步最新資料'); });
+    if (v && !S.D.ver) S.D.ver = v;
+  }).catch(function () { }).then(function () { syncCheck.busy = false; });
+}
 window.addEventListener('online', function () { qFlush(); });
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 function keyOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -138,6 +152,11 @@ function greet() { var h = new Date().getHours(); return h < 11 ? '早安' : h <
 function sk(h, n) { var s = ''; for (var i = 0; i < (n || 1); i++) s += '<div class="sk" style="height:' + h + 'px;margin-bottom:10px"></div>'; return s; }
 
 // ---------------------------------------------------------------- 外觀（淺色／深色）
+// 字體大小：整個畫面放大（準備室光線差、不想戴眼鏡時）
+var FONT = { normal: 1, big: 1.12, huge: 1.24 };
+function getFont() { try { var f = localStorage.getItem('lm-font'); return FONT[f] ? f : 'normal'; } catch (e) { return 'normal'; } }
+function setFont(f) { try { localStorage.setItem('lm-font', f); } catch (e) { } applyFont(); }
+function applyFont() { document.body.style.zoom = FONT[getFont()] === 1 ? '' : String(FONT[getFont()]); }
 function getTheme() { try { return localStorage.getItem('lm-theme') || 'auto'; } catch (e) { return 'auto'; } }
 function setTheme(t) { try { localStorage.setItem('lm-theme', t); } catch (e) { } applyTheme(); }
 function applyTheme() {
@@ -274,19 +293,26 @@ function useData(d) {
   S.D = d; S.week.U = null; S.week.key = ''; S.restock = null;
   S.week.start = S.week.start || d.today.key; S.week.lab = S.week.lab || d.rooms[0];
 }
+// 掃櫃子 QR Code 開的網頁：一開就列出這一櫃
+function bootGo() {
+  var B = window.BOOT; window.BOOT = null;
+  if (!B || !S.D) return;
+  if (B.room && B.cab) { S.search = { kw: '', cat: '', rows: null, room: B.room, cab: B.cab }; go('search'); }
+  else if (B.q) { S.search = { kw: B.q, cat: '', rows: null }; go('search'); }
+}
 function load() {
   qBar(); setTimeout(function () { qFlush(); }, 1500);
   var c = cacheGet();
   if (c) {
     useData(c.d); S.lastLoad = 0;
-    shell(); render(); staleBar('顯示 ' + hmOf(c.t) + ' 的資料，正在更新…');
+    shell(); render(); staleBar('顯示 ' + hmOf(c.t) + ' 的資料，正在更新…'); bootGo();
   } else {
     $('#main').innerHTML = '<div class="empty" style="padding-top:18vh">' + ART.duckFlask(120) + '<b>準備中…</b>第一次開啟約需 3～6 秒，之後會快很多</div>';
   }
   call('appInit').then(function (d) {
     if (c && S.week.start === c.d.today.key) S.week.start = d.today.key;   // 暫存是昨天的：課表跳到今天
     useData(d); S.lastLoad = Date.now(); cachePut(d);
-    staleBar(''); shell(); rerenderKeepSheet();
+    staleBar(''); shell(); rerenderKeepSheet(); bootGo();
     if (S.dirty) { S.dirty = false; reloadTodos(); }   // 更新中有打勾：再抓一次，免得被舊資料蓋掉
   }).catch(function (e) {
     if (c) { staleBar('沒有連上網路，顯示的是 ' + hmOf(c.t) + ' 的資料'); return; }
@@ -692,7 +718,7 @@ function drawWeek() {
     h = '<div class="card wkwrap"><table class="wk" style="min-width:' + (rooms.length > 3 ? 760 : 360) + 'px"><tr><th style="width:62px"></th>' + rooms.map(function (r) { return '<th>' + esc(S.wide ? r : short(r)) + '</th>'; }).join('') + '</tr>';
     S.D.periods.forEach(function (p, pi) {
       h += '<tr class="' + (d0 === today && pi === idx ? 'nowr' : '') + '"><td class="pr"><b>' + esc(p.short) + '</b>' + esc(p.start) + '</td>' + rooms.map(function (r) {
-        return '<td>' + list.filter(function (b) { return b.lab === r && b.date === d0 && b.pis.indexOf(pi) >= 0; }).map(function (b) { return ev(b); }).join('') + '</td>';
+        return '<td data-cell="' + esc(JSON.stringify([d0, pi, r])) + '">' + list.filter(function (b) { return b.lab === r && b.date === d0 && b.pis.indexOf(pi) >= 0; }).map(function (b) { return ev(b); }).join('') + '</td>';
       }).join('') + '</tr>';
     });
     h += '</table></div>';
@@ -703,7 +729,7 @@ function drawWeek() {
     }).join('') + '</tr>';
     S.D.periods.forEach(function (p, pi) {
       h += '<tr class="' + (pi === idx && days.some(function (d) { return d.key === today; }) ? 'nowr' : '') + '"><td class="pr"><b>' + esc(p.short) + '</b>' + esc(p.start) + '</td>' + days.map(function (d) {
-        return '<td>' + list.filter(function (b) { return b.date === d.key && b.pis.indexOf(pi) >= 0; }).map(function (b) { return ev(b); }).join('') + '</td>';
+        return '<td data-cell="' + esc(JSON.stringify([d.key, pi, w.lab])) + '">' + list.filter(function (b) { return b.date === d.key && b.pis.indexOf(pi) >= 0; }).map(function (b) { return ev(b); }).join('') + '</td>';
       }).join('') + '</tr>';
     });
     h += '</table></div>';
@@ -737,9 +763,90 @@ function drawWeek() {
     }).join('') + '</div>' : '';
   }
   if (!list.length && (w.mode === 'list' || w.kw)) h += '<div class="card"><div class="empty">' + ART.koalaSleep(90) + '<b>沒有符合的登記</b>換個關鍵字或日期看看</div></div>';
+  if (S.wide && (w.mode === 'week' || w.mode === 'day') && list.length) h += '<p class="muted" style="font-size:12px;margin:8px 4px">💡 按住課程拖到別的格子，可以換時段（平板長按一下再拖）</p>';
   el.innerHTML = h;
   bindLessons(el);
+  if (S.wide && (w.mode === 'week' || w.mode === 'day')) bindDrag(el);
   $$('[data-day]', el).forEach(function (x) { x.onclick = function () { w.mode = 'day'; w.start = x.getAttribute('data-day'); render(); }; });
+}
+
+// 電腦用滑鼠拖；平板長按 0.45 秒再拖（直接滑是捲動）
+function bindDrag(el) {
+  $$('.wk .ev', el).forEach(function (e) {
+    var a = JSON.parse(e.getAttribute('data-b')), b = S._bi[a[1]];
+    if (!b || !b.row || b.type === '放假') return;   // 放假整天的不給拖
+    var st = null, ghost = null, over = null, timer = null;
+    var cellAt = function (x, y) { if (ghost) ghost.style.display = 'none'; var t = document.elementFromPoint(x, y); if (ghost) ghost.style.display = ''; return t && t.closest ? t.closest('td[data-cell]') : null; };
+    var begin = function (x, y) {
+      ghost = e.cloneNode(true); ghost.className += ' ghost'; ghost.style.width = e.offsetWidth + 'px';
+      document.body.appendChild(ghost); document.body.classList.add('dragging'); e.classList.add('src'); move(x, y);
+    };
+    var move = function (x, y) {
+      if (!ghost) return;
+      ghost.style.left = x - 20 + 'px'; ghost.style.top = y - 14 + 'px';
+      var c = cellAt(x, y); if (c !== over) { if (over) over.classList.remove('drop'); over = c; if (c) c.classList.add('drop'); }
+    };
+    var end = function (drop) {
+      clearTimeout(timer); timer = null;
+      if (ghost) { ghost.remove(); ghost = null; document.body.classList.remove('dragging'); e.classList.remove('src'); e._noClick = true; setTimeout(function () { e._noClick = false; }, 50); }
+      if (over) over.classList.remove('drop');
+      var c = over; over = null; st = null;
+      if (drop && c) askMove(b, JSON.parse(c.getAttribute('data-cell')));
+    };
+    e.addEventListener('mousedown', function (v) {
+      if (v.button !== 0) return; st = { x: v.clientX, y: v.clientY }; v.preventDefault();
+      S._drag = { mm: function (v2) { if (!st) return; if (!ghost && Math.abs(v2.clientX - st.x) + Math.abs(v2.clientY - st.y) > 6) begin(v2.clientX, v2.clientY); move(v2.clientX, v2.clientY); },
+        mu: function () { S._drag = null; if (st) end(!!ghost); } };
+    });
+    e.addEventListener('touchstart', function (v) {
+      var t = v.touches[0]; st = { x: t.clientX, y: t.clientY };
+      timer = setTimeout(function () { timer = null; if (navigator.vibrate) try { navigator.vibrate(20); } catch (x) { } begin(st.x, st.y); }, 450);
+    }, { passive: true });
+    e.addEventListener('touchmove', function (v) {
+      var t = v.touches[0];
+      if (ghost) { v.preventDefault(); move(t.clientX, t.clientY); return; }
+      if (st && Math.abs(t.clientX - st.x) + Math.abs(t.clientY - st.y) > 8) { clearTimeout(timer); timer = null; st = null; }   // 是在捲動
+    }, { passive: false });
+    e.addEventListener('touchend', function (v) { if (ghost) { v.preventDefault(); end(true); } else end(false); });
+    e.addEventListener('touchcancel', function () { end(false); });
+    e.addEventListener('click', function (v) { if (e._noClick) { v.stopImmediatePropagation(); v.preventDefault(); } }, true);
+  });
+}
+window.addEventListener('mousemove', function (v) { if (S._drag) S._drag.mm(v); });
+window.addEventListener('mouseup', function (v) { if (S._drag) S._drag.mu(v); });
+// 拖到某格：確認 → 撞堂再確認 → 移動（可以復原）
+function askMove(b, cell) {
+  var date = cell[0], pi = cell[1], lab = cell[2], P = S.D.periods, n = Math.max(1, b.pis.length), per = null;
+  // 一樣的節數（例：3-4 兩節；中午不算在「4-5」裡）
+  if (n === 1) per = P[pi].short;
+  else for (var j = pi + 1; j < P.length; j++) { var tx = P[pi].short + '-' + P[j].short, ln = parsePer(tx).length; if (ln === n) { per = tx; break; } if (ln > n) break; }
+  if (!per) { toast('這堂課有 ' + n + ' 節，放不下', true); return; }
+  if (date === b.date && lab === b.lab && per === String(b.periodText).trim()) return;
+  var name = [b.content || b.type, b.cls].filter(String).join(' ');
+  var from = md(b.date) + '（' + wdOf(b.date) + '）' + perLabel(b.periodText) + ' ' + short(b.lab), to = md(date) + '（' + wdOf(date) + '）' + perLabel(per) + ' ' + short(lab);
+  var nt = todosOf(b).length;
+  var sh = openSheet('<h3>換時段<button class="x" data-close>' + ic('x') + '</button></h3>' +
+    '<p style="margin:6px 0 4px">把「<b>' + esc(name) + '</b>」</p><div class="mvbox"><span>' + esc(from) + '</span>' + ic('right', 's') + '<b>' + esc(to) + '</b></div>' +
+    (nt ? '<p class="muted" style="font-size:13px">這堂課的 ' + nt + ' 項準備事項也會一起移。</p>' : '') + '<div id="mvMsg"></div>' +
+    '<div class="btns2"><button class="btn g" data-close>取消</button><button class="btn p" id="mvGo">移過去</button></div>');
+  var doMove = function (force, btn) {
+    btn.disabled = true; btn.textContent = '移動中…';
+    var key = [b.date, b.lab, String(b.periodText).trim(), b.cls].join('|');
+    call('moveBooking', { row: b.row, key: key, date: date, period: per, lab: lab, force: !!force }).then(function (r) {
+      if (r.conflicts) {
+        $('#mvMsg', sh).innerHTML = '<div class="warnbox">⚠ 那個時段已經有：<br>' + r.conflicts.map(esc).join('<br>') + '</div>';
+        btn.disabled = false; btn.textContent = '還是要移（會重疊）'; btn.onclick = function () { doMove(true, btn); };
+        return;
+      }
+      closeSheet(); S.week.U = null; S.week.key = ''; S.week.sel = null; render(); reloadTodos(); refresh(false);
+      toast(r.msg, false, r.undo ? function () {
+        call('moveBooking', { row: r.row, key: r.key, date: r.undo.date, period: r.undo.period, lab: r.undo.lab, force: true })
+          .then(function (x) { toast('已移回原來的時段'); S.week.U = null; S.week.key = ''; render(); reloadTodos(); refresh(false); })
+          .catch(function (e) { toast('沒有移回去：' + e, true); });
+      } : null);
+    }).catch(function (e) { btn.disabled = false; btn.textContent = '移過去'; toast(e, true); });
+  };
+  $('#mvGo', sh).onclick = function () { doMove(false, this); };
 }
 
 // ---------------------------------------------------------------- 待辦
@@ -1071,6 +1178,7 @@ function vMore(m) {
     '<button data-go2="search"><span class="ic">' + ic('box') + '</span>品項查詢<span class="r">›</span></button>' +
     '<button data-go2="count"><span class="ic" style="background:var(--ok-weak);color:var(--ok)">' + ic('count') + '</span>盤點<span class="r">' + (S.D.kpi.count.total ? S.D.kpi.count.done + ' / ' + S.D.kpi.count.total : '') + ' ›</span></button></div>' +
     '<div class="h2">外觀</div><div class="seg">' + [['auto', '跟著系統'], ['light', '淺色'], ['dark', '深色']].map(function (x) { return '<button data-th="' + x[0] + '" class="' + (t === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="h2">字體大小</div><div class="seg">' + [['normal', '標準'], ['big', '大'], ['huge', '特大']].map(function (x) { return '<button data-fs="' + x[0] + '" class="' + (getFont() === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>' +
     '<div class="h2">其他</div><div class="menu"><button data-act2="refresh"><span class="ic">' + ic('refresh') + '</span>重新整理資料<span class="r">›</span></button>' +
     (S.D.url ? '<button id="mOld"><span class="ic">' + ic('grid') + '</span>舊版網頁<span class="r">›</span></button>' : '') +
     '<button id="mClr"><span class="ic">' + ic('x') + '</span>清除這台裝置的暫存資料<span class="r">›</span></button></div>' +
@@ -1078,6 +1186,7 @@ function vMore(m) {
     '<div class="empty" style="margin-top:10px">' + ART.koala(70) + '<b>實驗室管理</b>' + esc(S.D.school) + '　設備組<br><small class="muted">把網頁「加到主畫面」，用起來就像 App</small></div></div>';
   bindCommon(m);
   $$('[data-th]', m).forEach(function (b) { b.onclick = function () { setTheme(b.getAttribute('data-th')); badges(); render(); }; });
+  $$('[data-fs]', m).forEach(function (b) { b.onclick = function () { setFont(b.getAttribute('data-fs')); render(); }; });
   var o = $('#mOld', m); if (o) o.onclick = function () { window.open(S.D.url + '?page=old', '_blank'); };
   $('#mClr', m).onclick = function () { cacheClear(); toast('已清除這台裝置的暫存資料（下次開啟會從頭讀取）'); };
 }
@@ -1095,14 +1204,25 @@ function vRestock(m) {
 function vSearch(m) {
   var Q = S.search;
   m.innerHTML = '<div class="top">' + (S.wide ? '' : '<button class="icbtn" data-go2="more">' + ic('left') + '</button>') + '<div><h1>品項查詢</h1></div></div><div class="pad" style="max-width:980px">' +
-    '<input class="inp" id="qKw" placeholder="品名、化學式、編號、櫃別" value="' + esc(Q.kw) + '" style="font-size:16px">' +
+    (Q.cab ? '<div class="cabban">' + ic('pin', 's') + '<span><b>' + esc(Q.room + ' ' + Q.cab) + '</b><small>掃 QR Code 開的：這一櫃的品項</small></span>' +
+      '<button class="btn p s" id="qCount">' + ic('count', 's') + '盤點這一櫃</button><button class="x" id="qClr">' + ic('x') + '</button></div>' :
+    '<input class="inp" id="qKw" placeholder="品名、化學式、編號、櫃別" value="' + esc(Q.kw) + '" style="font-size:16px">') +
     '<div class="labsel" style="margin:10px 0">' + [['', '全部'], ['藥品', '藥品'], ['器材', '器材'], ['耗材', '耗材']].map(function (x) { return '<button class="pill' + (Q.cat === x[0] ? ' on' : '') + '" data-cat="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
     '<div id="qBody"></div></div>';
   bindCommon(m);
   var tm, q = $('#qKw', m);
+  if (Q.cab) {
+    $('#qClr', m).onclick = function () { S.search = { kw: '', cat: '', rows: null }; render(); };
+    $('#qCount', m).onclick = function () {
+      var C = S.count; C.room = Q.room; C.cab = Q.cab; C.idx = 0; C.filter = 'all';
+      var ok = function () { return cntRows().some(function (r) { return r.room === Q.room && r.cab === Q.cab; }); };
+      var goC = function () { if (ok()) go('count'); else toast('目前的盤點表沒有「' + Q.room + ' ' + Q.cab + '」（可能還沒產生盤點表）', true); };
+      if (C.data) goC(); else call('mobileData').then(function (d) { C.data = d; goC(); }).catch(function (e) { toast(e, true); });
+    };
+  }
   var run = function () {
     var el = $('#qBody'); el.innerHTML = sk(64, 4);
-    call('mobileSearch', { keyword: Q.kw, category: Q.cat, room: '' }).then(function (r) { Q.rows = r; draw(); }).catch(function (e) { el.innerHTML = '<div class="empty">查詢失敗：' + esc(e) + '</div>'; });
+    (Q.cab ? call('appCabItems', Q.room, Q.cab) : call('mobileSearch', { keyword: Q.kw, category: Q.cat, room: '' })).then(function (r) { Q.rows = r; draw(); }).catch(function (e) { el.innerHTML = '<div class="empty">查詢失敗：' + esc(e) + '</div>'; });
   };
   var draw = function () {
     var el = $('#qBody'), r = Q.rows; if (!el || !r) return;
@@ -1113,13 +1233,14 @@ function vSearch(m) {
     }).join('') + '</div>' + (r.more ? '<p class="muted" style="text-align:center">只顯示前 60 筆，請打更精確的關鍵字</p>' : '') :
       '<div class="card"><div class="empty">' + ART.koalaSleep(90) + '<b>找不到</b>換個關鍵字試試</div></div>';
   };
-  q.oninput = function () { Q.kw = q.value.trim(); clearTimeout(tm); tm = setTimeout(run, 400); };
+  if (q) q.oninput = function () { Q.kw = q.value.trim(); clearTimeout(tm); tm = setTimeout(run, 400); };
   $$('[data-cat]', m).forEach(function (b) { b.onclick = function () { Q.cat = b.getAttribute('data-cat'); $$('[data-cat]', m).forEach(function (x) { x.classList.toggle('on', x === b); }); run(); }; });
   if (Q.rows) draw(); else if (Q.kw || true) run();
-  if (!S.wide) setTimeout(function () { q.focus(); }, 50);
+  if (!S.wide && q) setTimeout(function () { q.focus(); }, 50);
 }
 
 // ---------------------------------------------------------------- 開始
 document.getElementById('fab').onclick = function () { openAdd({}); };
+applyFont();
 histInit();
 load();

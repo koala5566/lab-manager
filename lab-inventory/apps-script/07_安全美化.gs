@@ -204,6 +204,7 @@ function protectSheets_() {
     const L = colLetter_(items.col[n] + 1);
     warnRange(L + '2:' + L, n + '由程式自動填寫');
   });
+  if (typeof applyProtectMode_ === 'function') applyProtectMode_();   // 已切成嚴格保護的，重新設定後維持嚴格（19_進階管理）
 }
 
 // ---------------------------------------------------------------- 分頁顏色與順序

@@ -11,8 +11,13 @@
  * 需要「01」～「15」；「18」的一鍵產生準備事項也會用到這裡。
  */
 
-function page_app() {
-  return HtmlService.createHtmlOutput(APP_HTML)
+function page_app(p) {
+  // 掃櫃子 QR Code 開的：?room=…&cab=… → 網頁一開就列出這一櫃
+  p = p || {};
+  const boot = {};
+  ['room', 'cab', 'q'].forEach(function (k) { if (p[k]) boot[k] = String(p[k]).slice(0, 60); });
+  const html = APP_HTML.replace('/*BOOT*/null', function () { return JSON.stringify(boot).replace(/</g, '\\u003c'); });
+  return HtmlService.createHtmlOutput(html)
     .setTitle('實驗室管理')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .addMetaTag('mobile-web-app-capable', 'yes')
@@ -47,7 +52,13 @@ function appInit_() {
     kpi: { restock: restock, loans: appSheetCount_(LOAN_SHEET, '狀態', ['借出中'], '預計歸還'),
       purchase: appSheetCount_(REQ_SHEET, '狀態', ['待處理', '已請購']), count: count },
     url: ScriptApp.getService().getUrl() || '',
+    ver: appVersion(),
   };
+}
+
+/** 資料版本：試算表最後修改時間（任何人、任何方式改都會變）。網頁每分鐘問一次，變了才重新整理。 */
+function appVersion() {
+  try { return String(DriveApp.getFileById(SpreadsheetApp.getActive().getId()).getLastUpdated().getTime()); } catch (e) { return ''; }
 }
 
 /** 某工作表某欄是某些值的列數；dueCol 有給時也算逾期幾筆。 */
