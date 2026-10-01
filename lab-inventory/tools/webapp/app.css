@@ -199,3 +199,14 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 
 .jd{font-weight:600}.jd.bad{color:var(--bad)}.jd.warn{color:var(--warn)}.jd.ok{color:var(--ok)}
 .kitban{display:flex;gap:8px;align-items:flex-start;background:var(--pri-weak);color:var(--text);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;margin:4px 0 6px}.kitban .i{color:var(--pri);flex:none;margin-top:2px}
+.ck{position:relative}.ck::after{content:"";position:absolute;inset:-10px}
+.toast.undo{pointer-events:auto}.toast .ub{margin-left:6px;background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-weight:700;font-size:14px;flex:none}
+.discard{position:sticky;bottom:0;margin:14px -4px 0;background:var(--surface);border:1.5px solid var(--warn);border-radius:14px;padding:12px 14px;box-shadow:0 -6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:6px;font-size:14px;z-index:2}
+.discard b{display:flex;gap:6px;align-items:center;color:var(--warn)}.discard span{color:var(--sub);font-size:13px}.discard .btns2{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}.discard .dz{background:var(--bad);color:#fff;border:0}
+.discard.shake{animation:shk .35s}@keyframes shk{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.kitban.dr{background:var(--warn-weak)}.kitban .drb{display:flex;gap:8px;margin-top:8px}
+.qbar{position:fixed;left:50%;transform:translateX(-50%);top:calc(44px + env(safe-area-inset-top));z-index:85;background:var(--warn);color:#fff;border:0;border-radius:14px;padding:8px 14px;font-weight:700;font-size:14px;display:flex;flex-direction:column;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,.2);max-width:92vw}
+.qbar small{font-weight:500;font-size:11px;opacity:.9}
+.authbar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:95;background:var(--bad);color:#fff;border-radius:14px;padding:8px 10px 8px 14px;display:flex;gap:10px;align-items:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.authbar a{color:#fff;background:rgba(255,255,255,.2);text-decoration:none}
+#cSave.cf{background:var(--warn);border-color:var(--warn)}

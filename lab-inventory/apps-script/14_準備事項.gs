@@ -87,31 +87,64 @@ function todoData() {
 
 let todoLastBase_ = '';
 
-/** 新增：p = {date, period, lab, cls, teacher, note, items: [{what, qty, unit, code}]} */
+/** 新增：p = {date, period, lab, cls, teacher, note, items: [{what, qty, unit, code, buy}]} */
 function todoAdd(p) {
   const list = (p.items || []).filter(function (x) { return String(x.what || '').trim(); });
   if (!list.length) throw new Error('請至少填一樣要準備的東西。');
+  todoAddMany_([p]);
+  const nb = list.filter(function (x) { return x.buy; }).length;
+  return '已新增 ' + list.length + ' 項準備事項' + (nb ? '（其中 ' + nb + ' 項也加進請購清單）' : '') + (p.date ? '（' + rocText_(p.date) + '（' + weekdayOf_(dateKey_(p.date)) + '）要用）' : '') + '：\n' +
+    list.map(function (x) { return '・' + x.what + (x.qty ? ' × ' + x.qty + (x.unit || '') : ''); }).join('\n');
+}
+
+/**
+ * 一次新增好幾組（每組＝一堂課的好幾樣東西），整批一次寫入：一百堂課也只寫一次，不會超過 Google 6 分鐘的上限。
+ * groups = [p, p, …]（p 同 todoAdd）。回傳新增幾項。
+ */
+function todoAddMany_(groups) {
   const lock = LockService.getDocumentLock();
-  lock.waitLock(20000);
+  if (!lock.tryLock(30000)) throw new Error('系統正在存別的資料，請等幾秒再按一次。');
   try {
     const t = todoTable_();
     fixPeriodCol_(t.sheet, t.col['節次'] + 1);
     const stamp = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy-MM-dd HH:mm');
-    let base = Date.now().toString(36);
-    while (base === todoLastBase_) { Utilities.sleep(2); base = Date.now().toString(36); }   // 一次產生好幾堂課時 ID 不重複
-    todoLastBase_ = base;
-    list.forEach(function (x, i) {
-      if (x.buy) todoPurchase_(Object.assign({ id: 'T' + base + i, what: String(x.what).trim(), qty: x.qty, unit: x.unit, code: x.code }, p));
-      appendRow_(t, { 'ID': 'T' + base + i, '需要日期': p.date ? dateValue_(p.date) : '', '節次': p.period || '', '實驗室': p.lab || '',
-        '班級': p.cls || '', '教師': p.teacher || '', '事項': String(x.what).trim(), '數量': isNumber_(x.qty) ? Number(x.qty) : (x.qty || ''),
-        '單位': x.unit || '', '編號': x.code || '', '狀態': '待準備', '備註': p.note || '', '登錄時間': stamp, '完成時間': '' });
+    const rows = [];
+    groups.forEach(function (p) {
+      const list = (p.items || []).filter(function (x) { return String(x.what || '').trim(); });
+      if (!list.length) return;
+      let base = Date.now().toString(36);
+      while (base === todoLastBase_) { Utilities.sleep(2); base = Date.now().toString(36); }   // 每組的 ID 不重複
+      todoLastBase_ = base;
+      list.forEach(function (x, i) {
+        if (x.buy) todoPurchase_(Object.assign({ id: 'T' + base + i, what: String(x.what).trim(), qty: x.qty, unit: x.unit, code: x.code }, p));
+        rows.push({ 'ID': 'T' + base + i, '需要日期': p.date ? dateValue_(p.date) : '', '節次': p.period || '', '實驗室': p.lab || '',
+          '班級': p.cls || '', '教師': p.teacher || '', '事項': String(x.what).trim(), '數量': isNumber_(x.qty) ? Number(x.qty) : (x.qty || ''),
+          '單位': x.unit || '', '編號': x.code || '', '狀態': '待準備', '備註': p.note || '', '登錄時間': stamp, '完成時間': '' });
+      });
     });
+    appendRows_(t, rows);
+    return rows.length;
   } finally {
     lock.releaseLock();
   }
-  const nb = list.filter(function (x) { return x.buy; }).length;
-  return '已新增 ' + list.length + ' 項準備事項' + (nb ? '（其中 ' + nb + ' 項也加進請購清單）' : '') + (p.date ? '（' + rocText_(p.date) + '（' + weekdayOf_(dateKey_(p.date)) + '）要用）' : '') + '：\n' +
-    list.map(function (x) { return '・' + x.what + (x.qty ? ' × ' + x.qty + (x.unit || '') : ''); }).join('\n');
+}
+
+/** 好幾列一次寫到表格最後面（同 appendRow_，但只讀一次、寫一次）。 */
+function appendRows_(t, objs) {
+  if (!objs.length) return;
+  if (readMemo_) readMemo_ = {};
+  const data = objs.map(function (obj) {
+    const row = new Array(t.header.length).fill('');
+    Object.keys(obj).forEach(function (k) { if (k in t.col) row[t.col[k]] = safeCell_(obj[k]); });
+    return row;
+  });
+  const sh = t.sheet;
+  const vals = sh.getRange(2, 1, Math.max(1, sh.getMaxRows() - 1), 1).getValues();
+  let last = vals.length;
+  while (last > 0 && String(vals[last - 1][0]).trim() === '') last--;
+  const r = last + 2;
+  if (r + data.length - 1 > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), r + data.length - 1 - sh.getMaxRows() + 50);
+  sh.getRange(r, 1, data.length, data[0].length).setValues(data);
 }
 
 // ---------------------------------------------------------------- 準備事項 ↔ 請購清單

@@ -105,14 +105,11 @@ function kitTodoRange(from, to, apply) {
   });
   if (!apply) return { lessons: plan.length, total: total, dup: dup, lines: lines };
   if (!total) return '沒有要新增的：這段期間的實驗課' + (plan.length ? '，準備事項都已經產生過了。' : '都沒有對應的實驗套組。');
-  let n = 0;
-  plan.forEach(function (p) {
-    if (!p.x.items.length) return;
+  const n = todoAddMany_(plan.filter(function (p) { return p.x.items.length; }).map(function (p) {
     const l = p.lesson;
-    todoAdd({ date: l.date, period: l.period, lab: l.lab, cls: l.cls, teacher: l.teacher, note: p.x.note,
-      items: p.x.items.map(function (i) { return { what: i.what, qty: i.qty, unit: i.unit, code: i.code }; }) });
-    n += p.x.items.length;
-  });
+    return { date: l.date, period: l.period, lab: l.lab, cls: l.cls, teacher: l.teacher, note: p.x.note,
+      items: p.x.items.map(function (i) { return { what: i.what, qty: i.qty, unit: i.unit, code: i.code }; }) };
+  }));
   return '已產生 ' + n + ' 項準備事項（' + lines.length + ' 堂課）' + (dup ? '，' + dup + ' 項之前已經有了，沒有重複加。' : '。') +
     '\n\n' + lines.join('\n');
 }

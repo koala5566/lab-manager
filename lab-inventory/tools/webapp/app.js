@@ -17,10 +17,67 @@ function ic(n, cls) { return '<svg class="i ' + (cls || '') + '"><use href="#' +
 function call(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
   return new Promise(function (ok, bad) {
-    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { bad(e && e.message ? e.message : String(e)); });
+    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { bad(errText(e && e.message ? e.message : String(e))); });
     r[fn].apply(r, args);
   });
 }
+// 連不上網路（可以等一下再補傳）
+function isNetErr(m) { return (typeof navigator !== 'undefined' && navigator.onLine === false) || /NetworkError|HTTP 0|Failed to fetch|network|timed? ?out|連不上網路/i.test(String(m)); }
+// Google 的英文錯誤 → 中文
+function errText(m) {
+  m = String(m || '');
+  if (/authoriz|permission|PERMISSION_DENIED|access denied|not have access|sign ?in|login|授權|權限/i.test(m)) { authBar(); return '登入已過期或沒有權限，請重新整理網頁（必要時重新登入 Google）'; }
+  if (isNetErr(m)) return '連不上網路（' + m.replace(/^\w*Error:\s*/, '').slice(0, 40) + '）';
+  if (/exceeded maximum execution time|超過時間/i.test(m)) return '處理太久被 Google 中斷了，請把範圍縮小再試';
+  if (/Service invoked too many times|quota|配額/i.test(m)) return '今天 Google 的使用額度用完了，明天再試';
+  if (/[\u4e00-\u9fff]/.test(m)) return m.replace(/^\w*Error:\s*/, '');
+  return '發生錯誤（' + m.slice(0, 80) + '），請重新整理網頁再試一次';
+}
+function authBar() {
+  if ($('#authbar')) return;
+  var b = document.createElement('div'); b.id = 'authbar'; b.className = 'authbar';
+  b.innerHTML = ic('alert', 's') + '<span>登入已過期</span>' + (S.D && S.D.url ? '<a class="btn p s" href="' + esc(S.D.url) + '" target="_top">重新整理</a>' : '<span>請重新整理網頁</span>');
+  document.body.appendChild(b);
+}
+
+// ---------------------------------------------------------------- 網路斷掉時：先排隊，連上再補傳（打勾、盤點）
+// 只排「重複送也沒關係」的動作（todoSet、mobileSave），順序照按的順序。存在這台裝置，關掉網頁再開也會補傳。
+var Q_KEY = 'lm-queue-v1';
+function qGet() { try { return JSON.parse(localStorage.getItem(Q_KEY) || '[]') || []; } catch (e) { return []; } }
+function qPut(q) { try { if (q.length) localStorage.setItem(Q_KEY, JSON.stringify(q)); else localStorage.removeItem(Q_KEY); } catch (e) { } qBar(); }
+function qBar() {
+  var n = qGet().length, b = $('#qbar');
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.id = 'qbar'; b.className = 'qbar'; b.onclick = function () { qFlush(true); }; document.body.appendChild(b); }
+  b.innerHTML = '⏳ ' + n + ' 項等待上傳<small>連上網路自動補傳・點這裡重試</small>';
+}
+function callQ(fn, args, label) {
+  var q = qGet();
+  var push = function () { q = qGet(); q.push({ fn: fn, args: args, label: label, t: Date.now() }); qPut(q); return { queued: true }; };
+  if (q.length) { push(); qFlush(); return Promise.resolve({ queued: true }); }   // 前面還有在排的，照順序排後面
+  return call.apply(null, [fn].concat(args)).catch(function (e) {
+    if (isNetErr(e)) { push(); toast('網路不穩，「' + label + '」先存在這台裝置，連上再自動補傳', true); return { queued: true }; }
+    throw e;
+  });
+}
+function qFlush(manual) {
+  if (qFlush.busy) return;
+  var q = qGet(); if (!q.length) return;
+  qFlush.busy = true; var done = 0;
+  var next = function () {
+    q = qGet();
+    if (!q.length) { qFlush.busy = false; if (done) { toast('已補傳 ' + done + ' 項'); refresh(false); } return; }
+    var it = q[0];
+    call.apply(null, [it.fn].concat(it.args)).then(function () { q = qGet(); q.shift(); qPut(q); done++; next(); })
+      .catch(function (e) {
+        if (isNetErr(e)) { qFlush.busy = false; if (manual) toast('還是連不上網路，等一下會自動再試', true); return; }
+        q = qGet(); q.shift(); qPut(q); toast('「' + it.label + '」沒有存到：' + e, true); next();   // 資料有問題的不再重試
+      });
+  };
+  next();
+}
+setInterval(function () { qFlush(); }, 20000);
+window.addEventListener('online', function () { qFlush(); });
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 function keyOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function parseKey(k) { var a = k.split('-'); return new Date(+a[0], +a[1] - 1, +a[2]); }
@@ -69,12 +126,13 @@ function pendingTodos() {
 function soonTodos() {
   return pendingTodos().filter(function (t) { return !t.date || t.date <= S.D.next.key; });
 }
-function toast(msg, err) {
+function toast(msg, err, undo) {
   var t = $('#toast');
-  t.className = 'toast on' + (err ? ' err' : '');
-  t.innerHTML = (err ? ic('alert', 's') : ic('check', 's')) + '<span>' + esc(msg) + '</span>';
+  t.className = 'toast on' + (err ? ' err' : '') + (undo ? ' undo' : '');
+  t.innerHTML = (err ? ic('alert', 's') : ic('check', 's')) + '<span>' + esc(msg) + '</span>' + (undo ? '<button class="ub">復原</button>' : '');
+  if (undo) $('.ub', t).onclick = function () { clearTimeout(toast.tm); t.className = 'toast'; undo(); };
   clearTimeout(toast.tm);
-  toast.tm = setTimeout(function () { t.className = 'toast' + (err ? ' err' : ''); }, err ? 4200 : 2200);
+  toast.tm = setTimeout(function () { t.className = 'toast' + (err ? ' err' : ''); }, undo ? 5000 : err ? 4200 : 2200);
 }
 function greet() { var h = new Date().getHours(); return h < 11 ? '早安' : h < 14 ? '午安' : h < 18 ? '午安' : '晚安'; }
 function sk(h, n) { var s = ''; for (var i = 0; i < (n || 1); i++) s += '<div class="sk" style="height:' + h + 'px;margin-bottom:10px"></div>'; return s; }
@@ -150,11 +208,25 @@ function openSheet(html, onOpen) {
   var sh = document.createElement('div'); sh.className = 'sheet'; sh.id = 'sheet';
   sh.innerHTML = '<div class="grab"></div>' + html;
   document.body.appendChild(sc); document.body.appendChild(sh);
-  sc.onclick = function () { closeSheet(); };
+  sc.onclick = function () { tryClose(); };
   requestAnimationFrame(function () { sc.classList.add('on'); sh.classList.add('on'); });
-  $$('[data-close]', sh).forEach(function (b) { b.onclick = function () { closeSheet(); }; });
+  $$('[data-close]', sh).forEach(function (b) { b.onclick = function () { tryClose(); }; });
   if (onOpen) onOpen(sh);
   return sh;
+}
+// 使用者按 ✕ 或點外面：有打了還沒存的內容（sh._guard 回傳 true）先問
+function tryClose() {
+  var sh = $('#sheet'); if (!sh) return;
+  if (!sh._guard || !sh._guard()) { closeSheet(); return; }
+  if ($('.discard', sh)) { $('.discard', sh).classList.add('shake'); return; }
+  var d = document.createElement('div'); d.className = 'discard';
+  d.innerHTML = '<b>' + ic('alert', 's') + '還沒儲存</b><span>打好的內容已經自動存成草稿，下次按「新增」可以帶回來。</span>' +
+    '<div class="btns2"><button class="btn g s" data-k>繼續編輯</button><button class="btn g s" data-c>先關掉（留草稿）</button><button class="btn s dz" data-d>不要了</button></div>';
+  sh.appendChild(d);
+  d.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  $('[data-k]', d).onclick = function () { d.remove(); };
+  $('[data-c]', d).onclick = function () { closeSheet(); toast('已存成草稿'); };
+  $('[data-d]', d).onclick = function () { if (sh._discard) sh._discard(); closeSheet(); };
 }
 function closeSheet(now) {
   var sc = $('#scrim'), sh = $('#sheet');
@@ -183,6 +255,7 @@ function useData(d) {
   S.week.start = S.week.start || d.today.key; S.week.lab = S.week.lab || d.rooms[0];
 }
 function load() {
+  qBar(); setTimeout(function () { qFlush(); }, 1500);
   var c = cacheGet();
   if (c) {
     useData(c.d); S.lastLoad = 0;
@@ -276,13 +349,20 @@ function bindTodoRows(el) {
     b.onclick = function () { var t = S.D.todos.filter(function (x) { return x.id === b.getAttribute('data-back'); })[0]; if (t) setTodo(t, '已歸還', '已歸還：' + t.what); };
   });
 }
-function setTodo(t, st, msg) {
+function setTodo(t, st, msg, noUndo) {
   var old = t.status;
   t.status = st;
   if (st === '取消') S.D.todos = S.D.todos.filter(function (x) { return x !== t; });
-  badges(); rerenderKeepSheet(); toast(msg);
+  else if (S.D.todos.indexOf(t) < 0) S.D.todos.push(t);   // 復原「取消」
+  badges(); rerenderKeepSheet();
+  toast(msg, false, noUndo ? null : function () { setTodo(t, old, '已復原：' + t.what, true); });
   S.dirty = true;
-  call('todoSet', [t.id], st).catch(function (e) { t.status = old; if (st === '取消') S.D.todos.push(t); badges(); rerenderKeepSheet(); toast('沒有存到：' + e, true); });
+  callQ('todoSet', [[t.id], st], t.what + '（' + st + '）').catch(function (e) {
+    t.status = old;
+    if (st === '取消' && S.D.todos.indexOf(t) < 0) S.D.todos.push(t);
+    if (old === '取消') S.D.todos = S.D.todos.filter(function (x) { return x !== t; });
+    badges(); rerenderKeepSheet(); toast('沒有存到：' + e, true);
+  });
 }
 function rerenderKeepSheet() {
   render();
@@ -473,6 +553,18 @@ function fillLesson(el, b) {
   };
 }
 
+// 新增準備事項的草稿（關掉、當機、沒電都不會不見；7 天後自動丟掉）
+var DRAFT_KEY = 'lm-draft-v1';
+function draftGet() {
+  try { var d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    return d && d.st && d.st.rows && Date.now() - d.t < 7 * 864e5 && d.st.rows.some(function (r) { return (r.what || '').trim(); }) ? d : null; } catch (e) { return null; }
+}
+function draftPut(st) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ t: Date.now(), st: { date: st.date, lab: st.lab, period: st.period, cls: st.cls, teacher: st.teacher, note: st.note,
+    rows: st.rows.map(function (r) { return { what: r.what || '', qty: r.qty || '', unit: r.unit || '', code: r.code || '', buy: !!r.buy }; }) } })); } catch (e) { }
+}
+function draftClear() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) { } }
+
 // 實驗套組 → 準備事項：帶入「新增準備事項」畫面，看一眼按儲存（已經有的不重複帶）
 function kitToTodo(b, btn) {
   btn.disabled = true; btn.textContent = '讀取套組…';
@@ -639,8 +731,13 @@ function openAdd(pre) {
   pre = pre || {};
   var st = { date: pre.date || S.D.next.key, lab: pre.lab || '', period: pre.period || '', cls: pre.cls || '', teacher: pre.teacher || '', note: pre.note || '',
     rows: pre.rows && pre.rows.length ? pre.rows : [{}], lessons: [], manual: !!(pre.lab && !pre.cls) };
+  var draft = !pre.rows && draftGet();
   var sh = openSheet('<h3>新增準備事項<button class="x" data-close>' + ic('x') + '</button></h3><div id="aBody"></div>');
-  var body = $('#aBody', sh);
+  var body = $('#aBody', sh), saved = false;
+  var filled = function () { return st.rows.some(function (r) { return (r.what || '').trim(); }); };
+  sh._guard = function () { keep(); return !saved && filled(); };
+  sh._discard = draftClear;
+  sh.addEventListener('input', function () { clearTimeout(sh._dt); sh._dt = setTimeout(function () { keep(); }, 400); });
   function keep() {
     var g = function (id) { var e = $('#' + id, sh); return e ? e.value : undefined; };
     ['date', 'lab', 'period', 'cls', 'teacher', 'note'].forEach(function (k) { var v = g('a_' + k); if (v !== undefined) st[k] = v; });
@@ -648,10 +745,15 @@ function openAdd(pre) {
     $$('.aQty', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].qty = e.value; });
     $$('.aUnit', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].unit = e.value; });
     $$('.aBuy', sh).forEach(function (e) { st.rows[+e.getAttribute('data-i')].buy = e.checked; });
+    if (!saved && filled()) draftPut(st);
   }
   function isSel(l) { return l.lab === st.lab && String(l.periodText).trim() === String(st.period).trim() && l.cls === st.cls; }
   function draw() {
-    var h = (pre.banner ? '<div class="kitban">' + ic('todo', 's') + '<span>' + esc(pre.banner) + '</span></div>' : '') + '<label class="lbl">哪天要用</label><input type="date" class="inp" id="a_date" value="' + esc(st.date) + '">' +
+    var h = (pre.banner ? '<div class="kitban">' + ic('todo', 's') + '<span>' + esc(pre.banner) + '</span></div>' : '') +
+      (draft ? '<div class="kitban dr">' + ic('todo', 's') + '<span>上次有 <b>' + draft.st.rows.filter(function (r) { return (r.what || '').trim(); }).length + '</b> 項沒儲存（' +
+        esc(draft.st.rows.filter(function (r) { return (r.what || '').trim(); }).slice(0, 3).map(function (r) { return r.what; }).join('、')) + '…）' +
+        '<span class="drb"><button class="btn p s" id="aDraft">帶回來</button><button class="btn g s" id="aDraftNo">刪掉</button></span></span></div>' : '') +
+      '<label class="lbl">哪天要用</label><input type="date" class="inp" id="a_date" value="' + esc(st.date) + '">' +
       '<label class="lbl">哪一堂課（' + md(st.date) + ' ' + wdOf(st.date) + '）</label><div class="lesson">' +
       (st.lessons === null ? '<span class="muted" style="padding:8px 0">讀取中…</span>' : st.lessons.map(function (l, i) {
         return '<button data-l="' + i + '" class="' + (isSel(l) ? 'on' : '') + '">' + esc(perLabel(l.periodText) + ' ' + short(l.lab) + ' ' + (l.cls || l.content || l.type)) + '</button>';
@@ -688,6 +790,14 @@ function openAdd(pre) {
       inp.onblur = function () { setTimeout(function () { var s = inp.parentNode.querySelector('.sug'); if (s) s.remove(); }, 200); };
     });
     $('#aSave', sh).onclick = save;
+    var dy = $('#aDraft', sh), dn = $('#aDraftNo', sh);
+    if (dy) dy.onclick = function () {
+      var d = draft.st; draft = null;
+      ['date', 'lab', 'period', 'cls', 'teacher', 'note'].forEach(function (k) { st[k] = d[k] || ''; });
+      st.rows = d.rows.filter(function (r) { return (r.what || '').trim(); }); if (!st.rows.length) st.rows = [{}];
+      st.manual = !!(st.lab || st.cls); fetchLessons();
+    };
+    if (dn) dn.onclick = function () { draft = null; draftClear(); draw(); };
   }
   function suggest(inp) {
     var old = inp.parentNode.querySelector('.sug'); if (old) old.remove();
@@ -725,7 +835,7 @@ function openAdd(pre) {
       items: items.map(function (r) { return { what: r.what, qty: r.qty, unit: r.unit, code: r.code || '', buy: !!r.buy }; }) })
       .then(function () {
         var nb = items.filter(function (r) { return r.buy; }).length;
-        closeSheet(); toast('已新增 ' + items.length + ' 項準備事項' + (nb ? '，' + nb + ' 項加進請購清單' : ''));
+        saved = true; draftClear(); closeSheet(); toast('已新增 ' + items.length + ' 項準備事項' + (nb ? '，' + nb + ' 項加進請購清單' : ''));
         return reloadTodos();
       }).catch(function (e) { b.disabled = false; b.textContent = '儲存'; toast(e, true); });
   }
@@ -822,14 +932,23 @@ function vCount(m) {
   $('#cPrev', m).onclick = function () { if (C.idx > 0) { C.idx--; render(); } };
   q.onkeydown = function (e) { if (e.key === 'Enter') $('#cSave', m).click(); };
   $('#cSave', m).onclick = function () {
-    var qty = q.value.trim(), note = $('#cNote', m).value.trim();
-    if (qty === '' && note === '') { qty = String(cur.lastQty); if (qty === '') { toast('請填數量或說明', true); return; } }
+    var qty = q.value.trim(), note = $('#cNote', m).value.trim(), btn = this;
+    if (qty === '' && note === '') {
+      qty = String(cur.lastQty);
+      if (qty === '') { toast('請填數量或說明', true); return; }
+      // 沒填就按：先問一次，避免還沒數就被記成「跟上次一樣」
+      if (!btn.classList.contains('cf')) {
+        btn.classList.add('cf'); btn.textContent = '沿用上次 ' + qty + (cur.unit ? ' ' + cur.unit : '') + '？再按一次';
+        clearTimeout(btn.tm); btn.tm = setTimeout(function () { btn.classList.remove('cf'); btn.innerHTML = '存好，下一項' + ic('right', 's'); }, 3000);
+        return;
+      }
+    }
     var old = [cur.qty, cur.note];
     cur.qty = qty; cur.note = note;
     if (C.filter !== 'todo') C.idx++;
     render();
     toast('已存：' + cur.name + ' ' + (qty || note) + ' ' + cur.unit);
-    call('mobileSave', { code: cur.code, place: cur.place, qty: qty, note: note }).catch(function (e) {
+    callQ('mobileSave', [{ code: cur.code, place: cur.place, qty: qty, note: note }], cur.name + ' ' + (qty || note)).catch(function (e) {
       cur.qty = old[0]; cur.note = old[1]; render(); toast('沒有存到「' + cur.name + '」：' + e, true);
     });
   };
