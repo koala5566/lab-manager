@@ -8,7 +8,7 @@
  *   ・盤點：一次一項、大按鈕 −／＋、存好自動跳下一項
  *   ・更多：需補充、品項查詢、外觀（淺色／深色）
  * 畫面程式由 tools/webapp/ 的原始檔產生（build_webapp.py），請不要直接改下面的 APP_HTML。
- * 需要「01」～「15」。
+ * 需要「01」～「15」；「18」的一鍵產生準備事項也會用到這裡。
  */
 
 function page_app() {
@@ -22,8 +22,9 @@ function page_app() {
 /** 舊版手機網頁（?page=old） */
 function page_old(p) { return oldMobilePage_(p); }
 
-/** 一開網頁要的資料，一次給齊（之後只在需要時補抓）。 */
-function appInit() {
+/** 一開網頁要的資料，一次給齊（之後只在需要時補抓）。同一張工作表只讀一次（withReadMemo_）。 */
+function appInit() { return withReadMemo_(appInit_); }
+function appInit_() {
   const cfg = labConfig_();
   const s = getSettings_();
   const today = today_(), next = nextSchoolDay_(today);
@@ -181,6 +182,7 @@ html.dark .brand .lg{background:linear-gradient(135deg,#23355A,#1C3A33)}
 .toast{position:fixed;left:50%;transform:translate(-50%,20px);bottom:calc(92px + env(safe-area-inset-bottom));background:#1B2433;color:#fff;border-radius:12px;padding:11px 16px;font-size:14px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:90;opacity:0;pointer-events:none;transition:.25s;max-width:92vw}
 .toast.on{opacity:1;transform:translate(-50%,0)}.toast.err{background:#B42318}
 @media (min-width:900px){.toast{bottom:28px}}
+.stale{position:fixed;left:50%;transform:translateX(-50%);top:calc(8px + env(safe-area-inset-top));background:var(--warn-weak,#FEF3C7);color:var(--warn,#92400E);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;z-index:80;box-shadow:0 2px 8px rgba(0,0,0,.12);max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 html.dark .toast{background:#E6EAF1;color:#111}
 .fab{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;background:var(--pri);color:#fff;display:grid;place-items:center;box-shadow:0 8px 20px rgba(31,94,219,.35);z-index:25}
 .fab svg{width:26px;height:26px}@media (min-width:900px){.fab{bottom:28px;right:28px}}
@@ -298,6 +300,7 @@ table.wk tr.nowr td.pr{background:var(--pri-weak)}table.wk tr.nowr td.pr b{color
 .buyck{display:inline-flex;gap:5px;align-items:center;color:var(--warn);font-weight:600;font-size:12.5px;padding:4px 0}.buyck input{width:16px;height:16px}
 
 .jd{font-weight:600}.jd.bad{color:var(--bad)}.jd.warn{color:var(--warn)}.jd.ok{color:var(--ok)}
+.kitban{display:flex;gap:8px;align-items:flex-start;background:var(--pri-weak);color:var(--text);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;margin:4px 0 6px}.kitban .i{color:var(--pri);flex:none;margin-top:2px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
@@ -557,25 +560,49 @@ function closeSheet(now) {
 }
 
 // ---------------------------------------------------------------- 資料
+// 開網頁加速：上次的資料存在這台裝置（localStorage），一開就先顯示，同時在背景抓最新的，抓到就換掉。
+var CACHE_KEY = 'lm-cache-v1';
+function cacheGet() { try { var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); return c && c.d && c.d.today ? c : null; } catch (e) { return null; } }
+function cachePut(d) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), d: d })); } catch (e) { } }
+function cacheClear() { try { localStorage.removeItem(CACHE_KEY); } catch (e) { } }
+function staleBar(text) {
+  var b = $('#stale');
+  if (!text) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'stale'; b.className = 'stale'; document.body.appendChild(b); }
+  b.textContent = text;
+}
+function hmOf(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function useData(d) {
+  S.D = d; S.week.U = null; S.week.key = ''; S.restock = null;
+  S.week.start = S.week.start || d.today.key; S.week.lab = S.week.lab || d.rooms[0];
+}
 function load() {
-  $('#main').innerHTML = '<div class="empty" style="padding-top:18vh">' + ART.duckFlask(120) + '<b>準備中…</b>第一次開啟約需 3～6 秒</div>';
+  var c = cacheGet();
+  if (c) {
+    useData(c.d); S.lastLoad = 0;
+    shell(); render(); staleBar('顯示 ' + hmOf(c.t) + ' 的資料，正在更新…');
+  } else {
+    $('#main').innerHTML = '<div class="empty" style="padding-top:18vh">' + ART.duckFlask(120) + '<b>準備中…</b>第一次開啟約需 3～6 秒，之後會快很多</div>';
+  }
   call('appInit').then(function (d) {
-    S.D = d; S.lastLoad = Date.now();
-    S.week.start = d.today.key; S.week.lab = S.week.lab || d.rooms[0];
-    shell(); render();
+    if (c && S.week.start === c.d.today.key) S.week.start = d.today.key;   // 暫存是昨天的：課表跳到今天
+    useData(d); S.lastLoad = Date.now(); cachePut(d);
+    staleBar(''); shell(); rerenderKeepSheet();
+    if (S.dirty) { S.dirty = false; reloadTodos(); }   // 更新中有打勾：再抓一次，免得被舊資料蓋掉
   }).catch(function (e) {
+    if (c) { staleBar('沒有連上網路，顯示的是 ' + hmOf(c.t) + ' 的資料'); return; }
     $('#main').innerHTML = '<div class="empty" style="padding-top:18vh">' + ART.koalaSleep(120) + '<b>讀取失敗</b>' + esc(e) +
       '<div style="margin-top:14px"><button class="btn p" onclick="load()" style="margin:auto">再試一次</button></div></div>';
   });
 }
 function refresh(show) {
   return call('appInit').then(function (d) {
-    S.D = d; S.lastLoad = Date.now(); S.week.U = null; S.week.key = ''; S.restock = null;
+    useData(d); S.lastLoad = Date.now(); cachePut(d); staleBar('');
     shell(); render(); if (show) toast('已更新');
   }).catch(function (e) { if (show) toast('更新失敗：' + e, true); });
 }
 function reloadTodos() {
-  return call('todoData').then(function (d) { S.D.todos = d.list; badges(); render(); });
+  return call('todoData').then(function (d) { S.D.todos = d.list; cachePut(S.D); badges(); render(); });
 }
 document.addEventListener('visibilitychange', function () {
   if (!document.hidden && S.D && Date.now() - S.lastLoad > 3 * 60 * 1000) refresh(false);
@@ -648,6 +675,7 @@ function setTodo(t, st, msg) {
   t.status = st;
   if (st === '取消') S.D.todos = S.D.todos.filter(function (x) { return x !== t; });
   badges(); rerenderKeepSheet(); toast(msg);
+  S.dirty = true;
   call('todoSet', [t.id], st).catch(function (e) { t.status = old; if (st === '取消') S.D.todos.push(t); badges(); rerenderKeepSheet(); toast('沒有存到：' + e, true); });
 }
 function rerenderKeepSheet() {
@@ -821,6 +849,10 @@ function fillLesson(el, b) {
         '<span class="ok">' + hv + (r.bulk ? '（大包裝）' : '') + ' ✔</span>';
       return '<div class="kit"><span>' + esc(r.name) + (r.need !== '' ? ' × ' + esc(r.need) : '') + (r.note ? '<br><small class="muted">' + esc(r.note) + '</small>' : '') + '</span>' + st + '</div>';
     }).join('') || '<span class="muted">套組沒有器材</span>';
+    if (k.rows.length) {
+      el2.insertAdjacentHTML('beforeend', '<button class="btn p s" id="lKitTodo" style="width:100%;margin-top:10px">' + ic('todo', 's') + '一鍵產生準備事項</button>');
+      $('#lKitTodo', box).onclick = function () { kitToTodo(b, this); };
+    }
   }).catch(function () { });
   $('#lSave', box).onclick = function () {
     var name = $('#lName', box).value.trim(), g = $('#lGroups', box).value.trim(), btn = this;
@@ -833,6 +865,22 @@ function fillLesson(el, b) {
         refresh(false).then(function () { if (el._lesson) fillLesson(el, b); });
       }).catch(function (e) { btn.disabled = false; btn.textContent = '儲存實驗名稱'; toast(e, true); });
   };
+}
+
+// 實驗套組 → 準備事項：帶入「新增準備事項」畫面，看一眼按儲存（已經有的不重複帶）
+function kitToTodo(b, btn) {
+  btn.disabled = true; btn.textContent = '讀取套組…';
+  var done = function () { btn.disabled = false; btn.innerHTML = ic('todo', 's') + '一鍵產生準備事項'; };
+  call('kitTodoPreview', { date: b.date, lab: b.lab, period: b.periodText, cls: b.cls, teacher: b.teacher, name: b.content, groups: b.groups || 0 })
+    .then(function (x) {
+      done();
+      if (!x) { toast('「實驗套組」裡沒有「' + b.content + '」', true); return; }
+      if (!x.items.length) { toast(x.dup ? '套組的 ' + x.dup + ' 樣器材都已經在準備事項裡了' : '套組沒有器材', !x.dup); return; }
+      openAdd({ date: b.date, lab: b.lab, period: b.periodText, cls: b.cls, teacher: b.teacher, note: x.note,
+        rows: x.items.map(function (i) { return { what: i.what, qty: String(i.qty), unit: i.unit, code: i.code, info: i.info }; }),
+        banner: '從實驗套組「' + x.kit + '」' + (x.groups ? '（' + x.groups + ' 組）' : '') + '帶入 ' + x.items.length + ' 項' +
+          (x.dup ? '，已經有的 ' + x.dup + ' 項沒有重複帶' : '') + '。數量可以改，不需要的按 ✕，確認後按「儲存」。' });
+    }).catch(function (e) { done(); toast(e, true); });
 }
 
 // ---------------------------------------------------------------- 課表
@@ -983,7 +1031,8 @@ function vTodo(m) {
 // ---------------------------------------------------------------- 新增準備事項（抽屜）
 function openAdd(pre) {
   pre = pre || {};
-  var st = { date: pre.date || S.D.next.key, lab: pre.lab || '', period: pre.period || '', cls: pre.cls || '', teacher: pre.teacher || '', note: '', rows: [{}], lessons: [], manual: !!(pre.lab && !pre.cls) };
+  var st = { date: pre.date || S.D.next.key, lab: pre.lab || '', period: pre.period || '', cls: pre.cls || '', teacher: pre.teacher || '', note: pre.note || '',
+    rows: pre.rows && pre.rows.length ? pre.rows : [{}], lessons: [], manual: !!(pre.lab && !pre.cls) };
   var sh = openSheet('<h3>新增準備事項<button class="x" data-close>' + ic('x') + '</button></h3><div id="aBody"></div>');
   var body = $('#aBody', sh);
   function keep() {
@@ -996,7 +1045,7 @@ function openAdd(pre) {
   }
   function isSel(l) { return l.lab === st.lab && String(l.periodText).trim() === String(st.period).trim() && l.cls === st.cls; }
   function draw() {
-    var h = '<label class="lbl">哪天要用</label><input type="date" class="inp" id="a_date" value="' + esc(st.date) + '">' +
+    var h = (pre.banner ? '<div class="kitban">' + ic('todo', 's') + '<span>' + esc(pre.banner) + '</span></div>' : '') + '<label class="lbl">哪天要用</label><input type="date" class="inp" id="a_date" value="' + esc(st.date) + '">' +
       '<label class="lbl">哪一堂課（' + md(st.date) + ' ' + wdOf(st.date) + '）</label><div class="lesson">' +
       (st.lessons === null ? '<span class="muted" style="padding:8px 0">讀取中…</span>' : st.lessons.map(function (l, i) {
         return '<button data-l="' + i + '" class="' + (isSel(l) ? 'on' : '') + '">' + esc(perLabel(l.periodText) + ' ' + short(l.lab) + ' ' + (l.cls || l.content || l.type)) + '</button>';
@@ -1205,11 +1254,14 @@ function vMore(m) {
     '<button data-go2="count"><span class="ic" style="background:var(--ok-weak);color:var(--ok)">' + ic('count') + '</span>盤點<span class="r">' + (S.D.kpi.count.total ? S.D.kpi.count.done + ' / ' + S.D.kpi.count.total : '') + ' ›</span></button></div>' +
     '<div class="h2">外觀</div><div class="seg">' + [['auto', '跟著系統'], ['light', '淺色'], ['dark', '深色']].map(function (x) { return '<button data-th="' + x[0] + '" class="' + (t === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>' +
     '<div class="h2">其他</div><div class="menu"><button data-act2="refresh"><span class="ic">' + ic('refresh') + '</span>重新整理資料<span class="r">›</span></button>' +
-    (S.D.url ? '<button id="mOld"><span class="ic">' + ic('grid') + '</span>舊版網頁<span class="r">›</span></button>' : '') + '</div>' +
+    (S.D.url ? '<button id="mOld"><span class="ic">' + ic('grid') + '</span>舊版網頁<span class="r">›</span></button>' : '') +
+    '<button id="mClr"><span class="ic">' + ic('x') + '</span>清除這台裝置的暫存資料<span class="r">›</span></button></div>' +
+    '<p class="muted" style="font-size:12px;margin:8px 4px 0">為了開得快，上次的資料會暫存在這台裝置。用公用電腦時，用完可以按上面清除。</p>' +
     '<div class="empty" style="margin-top:10px">' + ART.koala(70) + '<b>實驗室管理</b>' + esc(S.D.school) + '　設備組<br><small class="muted">把網頁「加到主畫面」，用起來就像 App</small></div></div>';
   bindCommon(m);
   $$('[data-th]', m).forEach(function (b) { b.onclick = function () { setTheme(b.getAttribute('data-th')); badges(); render(); }; });
   var o = $('#mOld', m); if (o) o.onclick = function () { window.open(S.D.url + '?page=old', '_blank'); };
+  $('#mClr', m).onclick = function () { cacheClear(); toast('已清除這台裝置的暫存資料（下次開啟會從頭讀取）'); };
 }
 function vRestock(m) {
   m.innerHTML = '<div class="top">' + (S.wide ? '' : '<button class="icbtn" data-go2="more">' + ic('left') + '</button>') + '<div><h1>需補充</h1><div class="sub">低於安全存量的品項</div></div></div><div class="pad" id="rBody">' + sk(70, 5) + '</div>';

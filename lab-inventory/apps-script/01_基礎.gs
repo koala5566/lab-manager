@@ -42,6 +42,7 @@ const MENU = [
     ['📝 準備事項待辦清單', 'todoDialog'],
     ['列印準備事項', 'printTodoDialog'],
     null,
+    ['📝 依實驗套組產生準備事項（一段期間）', 'kitTodoDialog'],
     ['列印實驗準備單', 'printPrepDialog'],
     ['實驗套組庫存檢核', 'printKitCheck'],
   ]],
@@ -60,6 +61,7 @@ const MENU = [
   ]],
   ['🔧 維護', [
     ['立即備份', 'backupNow'],
+    ['📧 每天早上 email 提醒（設定）', 'mailSetupDialog'],
     ['首頁、美化與資料保護（一次設定）', 'setupEnhancements'],
     null,
     ['重新計算最新數量', 'updateLatest'],
@@ -124,8 +126,25 @@ function checkTimeZone_() {
 
 // ---------------------------------------------------------------- 共用：讀工作表
 
+/**
+ * 只讀不寫的動作（開網頁、寄提醒信）期間，同一張工作表只讀一次，加快速度。
+ * 用法：withReadMemo_(function () { …只讀取的程式… })。有寫入（ensureSheet_、appendRow_）時會自動清掉。
+ */
+let readMemo_ = null;
+function withReadMemo_(fn) {
+  const outer = readMemo_;
+  if (!outer) readMemo_ = {};
+  try { return fn(); } finally { if (!outer) readMemo_ = null; }
+}
+
 /** 讀整張工作表，依第一列標題找欄位，欄位順序日後調整也不受影響。 */
 function getTable_(name) {
+  if (readMemo_ && readMemo_['t:' + name]) return readMemo_['t:' + name];
+  const t = getTable__(name);
+  if (readMemo_) readMemo_['t:' + name] = t;
+  return t;
+}
+function getTable__(name) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(name);
   if (!sheet) throw new Error('找不到工作表「' + name + '」，請確認分頁名稱沒有被改掉。');
   const values = sheet.getDataRange().getValues();
@@ -145,6 +164,12 @@ function need_(table, names) {
 
 /** 讀「設定」：參數（A、B 欄）、各下拉選單清單、清單分區表。 */
 function getSettings_() {
+  if (readMemo_ && readMemo_.settings) return readMemo_.settings;
+  const st = getSettings__();
+  if (readMemo_) readMemo_.settings = st;
+  return st;
+}
+function getSettings__() {
   const sheet = SpreadsheetApp.getActive().getSheetByName('設定');
   if (!sheet) throw new Error('找不到工作表「設定」。');
   const values = sheet.getDataRange().getValues();

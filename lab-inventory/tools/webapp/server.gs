@@ -8,7 +8,7 @@
  *   ・盤點：一次一項、大按鈕 −／＋、存好自動跳下一項
  *   ・更多：需補充、品項查詢、外觀（淺色／深色）
  * 畫面程式由 tools/webapp/ 的原始檔產生（build_webapp.py），請不要直接改下面的 APP_HTML。
- * 需要「01」～「15」。
+ * 需要「01」～「15」；「18」的一鍵產生準備事項也會用到這裡。
  */
 
 function page_app() {
@@ -22,8 +22,9 @@ function page_app() {
 /** 舊版手機網頁（?page=old） */
 function page_old(p) { return oldMobilePage_(p); }
 
-/** 一開網頁要的資料，一次給齊（之後只在需要時補抓）。 */
-function appInit() {
+/** 一開網頁要的資料，一次給齊（之後只在需要時補抓）。同一張工作表只讀一次（withReadMemo_）。 */
+function appInit() { return withReadMemo_(appInit_); }
+function appInit_() {
   const cfg = labConfig_();
   const s = getSettings_();
   const today = today_(), next = nextSchoolDay_(today);

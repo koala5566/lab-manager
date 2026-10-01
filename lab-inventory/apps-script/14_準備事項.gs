@@ -85,6 +85,8 @@ function todoData() {
   };
 }
 
+let todoLastBase_ = '';
+
 /** 新增：p = {date, period, lab, cls, teacher, note, items: [{what, qty, unit, code}]} */
 function todoAdd(p) {
   const list = (p.items || []).filter(function (x) { return String(x.what || '').trim(); });
@@ -95,7 +97,9 @@ function todoAdd(p) {
     const t = todoTable_();
     fixPeriodCol_(t.sheet, t.col['節次'] + 1);
     const stamp = Utilities.formatDate(new Date(), SCHOOL_TZ, 'yyyy-MM-dd HH:mm');
-    const base = Date.now().toString(36);
+    let base = Date.now().toString(36);
+    while (base === todoLastBase_) { Utilities.sleep(2); base = Date.now().toString(36); }   // 一次產生好幾堂課時 ID 不重複
+    todoLastBase_ = base;
     list.forEach(function (x, i) {
       if (x.buy) todoPurchase_(Object.assign({ id: 'T' + base + i, what: String(x.what).trim(), qty: x.qty, unit: x.unit, code: x.code }, p));
       appendRow_(t, { 'ID': 'T' + base + i, '需要日期': p.date ? dateValue_(p.date) : '', '節次': p.period || '', '實驗室': p.lab || '',

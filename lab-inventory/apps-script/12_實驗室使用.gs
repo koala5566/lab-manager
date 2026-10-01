@@ -38,6 +38,7 @@ function ensureLabSettings_() {
   const addTable = function (headers, rows, colorCol) {
     if (headers.every(function (h) { return s.header.indexOf(h) >= 0; })) return;
     const c = lastCol + 2;
+    if (readMemo_) readMemo_ = {};   // 改了設定，暫存不能再用
     sh.getRange(1, c, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#DDEBF7');
     sh.getRange(2, c, rows.length, headers.length).setNumberFormat('@').setValues(rows);
     if (colorCol !== undefined) rows.forEach(function (r, i) { sh.getRange(2 + i, c + colorCol).setBackground(r[colorCol]); });
@@ -48,6 +49,7 @@ function ensureLabSettings_() {
   addTable(['用途類型', '顏色'], LAB_DEFAULTS.types, 1);
   addTable(['班名'], LAB_DEFAULTS.classNames.map(function (r) { return [r]; }));
   if (!('安全注意事項' in s.params)) {
+    if (readMemo_) readMemo_ = {};
     const colA = sh.getRange(1, 1, sh.getMaxRows(), 1).getValues();
     let last = 0;
     colA.forEach(function (v, i) { if (String(v[0]).trim()) last = i; });
@@ -58,6 +60,12 @@ function ensureLabSettings_() {
 
 /** 實驗室使用相關設定。 */
 function labConfig_() {
+  if (readMemo_ && readMemo_.lab) return readMemo_.lab;   // 開網頁、寄提醒信時只算一次
+  const cfg = labConfig__();
+  if (readMemo_) readMemo_.lab = cfg;
+  return cfg;
+}
+function labConfig__() {
   ensureLabSettings_();
   const s = getSettings_();
   // 時間用「顯示的文字」讀，避免被當成日期時間；8:10 → 08:10

@@ -26,6 +26,7 @@ const LOAN_STATUS = ['借出中', '已歸還'];
 
 /** 工作表不存在就建立（含標題、凍結）；存在就補上缺少的欄位。回傳 getTable_ 結果。 */
 function ensureSheet_(name, cols, widths, tabColor) {
+  if (readMemo_) readMemo_ = {};   // 要改工作表了，先前讀到的暫存不能再用
   const ss = SpreadsheetApp.getActive();
   let sh = ss.getSheetByName(name);
   if (!sh) {
@@ -136,6 +137,7 @@ function setupPurchaseSheet_() {
  * 公式欄（預估金額）寫空白，不影響整欄公式。回傳寫入的列號。
  */
 function appendRow_(t, obj) {
+  if (readMemo_) readMemo_ = {};
   const row = new Array(t.header.length).fill('');
   Object.keys(obj).forEach(function (k) { if (k in t.col && k !== '預估金額') row[t.col[k]] = safeCell_(obj[k]); });
   const vals = t.sheet.getRange(2, 1, Math.max(1, t.sheet.getMaxRows() - 1), 1).getValues();
